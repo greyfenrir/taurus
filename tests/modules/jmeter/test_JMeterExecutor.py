@@ -859,7 +859,7 @@ class TestJMeterExecutor(BZTestCase):
         self.assertTrue(os.path.exists(prop_file_path))
         with open(prop_file_path) as prop_file:
             contents = prop_file.read()
-        info = "dist_servers: %s" % self.obj.distributed_servers
+        info = "dist servers: %s" % self.obj.distributed_servers
         info += "\nsettings.gui: %s" % self.obj.settings.get('gui')
         self.assertIn("remote_hosts=127.0.0.1,127.0.0.2", contents, info)
 
