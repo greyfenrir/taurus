@@ -32,16 +32,17 @@ from itertools import dropwhile
 from cssselect import GenericTranslator
 
 from bzt import TaurusConfigError, ToolError, TaurusInternalException, TaurusNetworkError
-from bzt.engine import ScenarioExecutor, Scenario, FileLister, HavingInstallableTools, SelfDiagnosable
+from bzt.engine import ScenarioExecutor, Scenario, FileLister, HavingInstallableTools, SelfDiagnosable, Provisioning
 from bzt.modules.aggregator import ConsolidatingAggregator, ResultsReader, DataPoint, KPISet
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.modules.functional import FunctionalAggregator, FunctionalResultsReader, FunctionalSample
 from bzt.modules.provisioning import Local
 from bzt.modules.soapui import SoapUIScriptConverter
 from bzt.requests_model import ResourceFilesCollector
-from bzt.six import iteritems, string_types, StringIO, etree, binary_type, parse, unicode_decode
+from bzt.six import communicate
+from bzt.six import iteritems, string_types, StringIO, etree, parse, unicode_decode, numeric_types
 from bzt.utils import get_full_path, EXE_SUFFIX, MirrorsManager, ExceptionalDownloader, get_uniq_name
-from bzt.utils import shell_exec, BetterDict, guess_csv_dialect
+from bzt.utils import shell_exec, BetterDict, guess_csv_dialect, ensure_is_dict, dehumanize_time
 from bzt.utils import unzip, RequiredTool, JavaVM, shutdown_process, ProgressBarContext, TclLibrary
 from bzt.jmx import JMX, JMeterScenarioBuilder, LoadSettingsProcessor
 
@@ -57,8 +58,9 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
     """
     MIRRORS_SOURCE = "https://jmeter.apache.org/download_jmeter.cgi"
     JMETER_DOWNLOAD_LINK = "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-{version}.zip"
-    PLUGINS_MANAGER = 'https://search.maven.org/remotecontent?filepath=' \
-                      'kg/apc/jmeter-plugins-manager/0.15/jmeter-plugins-manager-0.15.jar'
+    PLUGINS_MANAGER_VERSION = "0.15"
+    PLUGINS_MANAGER = 'https://search.maven.org/remotecontent?filepath=kg/apc/jmeter-plugins-manager/'\
+            '{ver}/jmeter-plugins-manager-{ver}.jar'.format(ver=PLUGINS_MANAGER_VERSION)
     CMDRUNNER = 'https://search.maven.org/remotecontent?filepath=kg/apc/cmdrunner/2.0/cmdrunner-2.0.jar'
     JMETER_VER = "3.2"
     UDP_PORT_NUMBER = None
@@ -82,6 +84,115 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         self.stdout_file = None
         self.stderr_file = None
         self.tool = None
+
+    def get_load(self):
+        """
+        Helper method to read load specification
+        """
+        load = self.get_specific_load()
+
+        throughput = load.throughput
+        concurrency = load.concurrency
+        iterations = load.iterations
+        steps = load.steps
+        hold = load.hold
+        ramp_up = load.ramp_up
+
+        hold = self._try_convert(hold, dehumanize_time, 0)
+        duration = hold
+
+        if ramp_up is not None:
+            ramp_up = self._try_convert(ramp_up, dehumanize_time, 0)
+            duration += ramp_up
+
+        msg = ''
+        if not isinstance(concurrency, numeric_types + (type(None),)):
+            msg += "\nNon-integer concurrency value [%s]: %s " % (type(concurrency).__name__, concurrency)
+        if not isinstance(throughput, numeric_types + (type(None),)):
+            msg += "\nNon-integer throughput value [%s]: %s " % (type(throughput).__name__, throughput)
+        if not isinstance(steps, numeric_types + (type(None),)):
+            msg += "\nNon-integer steps value [%s]: %s " % (type(steps).__name__, steps)
+        if not isinstance(iterations, numeric_types + (type(None),)):
+            msg += "\nNon-integer iterations value [%s]: %s " % (type(iterations).__name__, iterations)
+
+        if msg:
+            self.log.warning(msg)
+
+        throughput = self._try_convert(throughput, float, 0)
+        concurrency = self._try_convert(concurrency, int, 0)
+        iterations = self._try_convert(iterations, int, 0)
+        steps = self._try_convert(steps, int, 0)
+
+        if duration and not iterations:
+            iterations = 0  # which means infinite
+
+        return self.LOAD_FMT(concurrency=concurrency, ramp_up=ramp_up, throughput=throughput, hold=hold,
+                             iterations=iterations, duration=duration, steps=steps)
+
+    @staticmethod
+    def _get_prop_default(val):
+        comma_ind = val.find(",")
+        if val.startswith("${") and val.endswith(")}") and comma_ind > -1:
+            return val[comma_ind + 1: -2]
+        else:
+            return None
+
+    @staticmethod
+    def _try_convert(val, func, default=None):
+        if val is None:
+            res = val
+        elif isinstance(val, string_types) and val.startswith('$'):   # it's property...
+            if default is not None:
+                val = JMeterExecutor._get_prop_default(val) or default
+                res = func(val)
+            else:
+                res = val
+        else:
+            res = func(val)
+
+        return res
+
+    def get_specific_load(self):
+        """
+        Helper method to read load specification
+        """
+        prov_type = self.engine.config.get(Provisioning.PROV)
+
+        ensure_is_dict(self.execution, ScenarioExecutor.THRPT, prov_type)
+        throughput = self.execution[ScenarioExecutor.THRPT].get(prov_type, 0)
+
+        ensure_is_dict(self.execution, ScenarioExecutor.CONCURR, prov_type)
+        concurrency = self.execution[ScenarioExecutor.CONCURR].get(prov_type, 0)
+
+        iterations = self.execution.get("iterations", None)
+
+        steps = self.execution.get(ScenarioExecutor.STEPS, None)
+
+        hold = self.execution.get(ScenarioExecutor.HOLD_FOR, 0)
+        hold = self._try_convert(hold, dehumanize_time)
+
+        ramp_up = self.execution.get(ScenarioExecutor.RAMP_UP, None)
+        ramp_up = self._try_convert(ramp_up, dehumanize_time)
+
+        if not hold:
+            duration = ramp_up
+        elif not ramp_up:
+            duration = hold
+        elif isinstance(ramp_up, numeric_types) and isinstance(hold, numeric_types):
+            duration = hold + ramp_up
+        else:
+            duration = 1        # dehumanize_time(<sum_of_props>) can be unpredictable so we use default there
+
+        throughput = self._try_convert(throughput, float)
+        concurrency = self._try_convert(concurrency, int)
+        iterations = self._try_convert(iterations, int)
+        steps = self._try_convert(steps, int)
+
+        if duration and not iterations:
+            iterations = 0  # which means infinite
+
+        return self.LOAD_FMT(concurrency=concurrency, ramp_up=ramp_up, throughput=throughput, hold=hold,
+                             iterations=iterations, duration=duration, steps=steps)
 
     def get_scenario(self, name=None, cache_scenario=True):
         scenario_obj = super(JMeterExecutor, self).get_scenario(name=name, cache_scenario=False)
@@ -128,6 +239,19 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
 
         return scenario_name, merged_scenario
 
+    @staticmethod
+    def _get_tool_version(jmx_file):
+        jmx = JMX(jmx_file)
+        selector = 'jmeterTestPlan'
+        test_plan = jmx.get(selector)[0]
+        ver = test_plan.get('jmeter')
+        if isinstance(ver, string_types):
+            index = ver.find(" ")
+            if index != -1:
+                return ver[:index]
+
+        return JMeterExecutor.JMETER_VER
+
     def prepare(self):
         """
         Preparation for JMeter involves either getting existing JMX
@@ -141,12 +265,15 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
 
         self.jmeter_log = self.engine.create_artifact("jmeter", ".log")
         self._set_remote_port()
-        self.install_required_tools()
         self.distributed_servers = self.execution.get('distributed', self.distributed_servers)
 
         is_jmx_generated = False
 
         self.original_jmx = self.get_script_path()
+        if self.settings.get("version", self.JMETER_VER) == "auto":
+            self.settings["version"] = self._get_tool_version(self.original_jmx)
+        self.install_required_tools()
+
         if not self.original_jmx:
             if scenario.get("requests"):
                 self.original_jmx = self.__jmx_from_requests()
@@ -154,18 +281,21 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
             else:
                 raise TaurusConfigError("You must specify either a JMX file or list of requests to run JMeter")
 
+        # check for necessary plugins and install them if needed
+        if self.settings.get("detect-plugins", True):
+            self.tool.install_for_jmx(self.original_jmx)
+
         if self.engine.aggregator.is_functional:
             flags = {"connectTime": True}
-            version = str(self.settings.get("version", self.JMETER_VER))
-            if version.startswith("2"):
+            version = LooseVersion(str(self.settings.get("version", self.JMETER_VER)))
+            major = version.version[0]
+            if major == 2:
                 flags["bytes"] = True
             else:
                 flags["sentBytes"] = True
             self.settings.merge({"xml-jtl-flags": flags})
 
-        load = self.get_load()
-
-        modified = self.__get_modified_jmx(self.original_jmx, load, is_jmx_generated)
+        modified = self.__get_modified_jmx(self.original_jmx, is_jmx_generated)
         self.modified_jmx = self.__save_modified_jmx(modified, self.original_jmx, is_jmx_generated)
 
         self.__set_jmeter_properties(scenario)
@@ -449,14 +579,14 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
             self.log.debug("Enforcing parent sample for transaction controller")
             jmx.set_text('TransactionController > boolProp[name="TransactionController.parent"]', 'true')
 
-    def __get_modified_jmx(self, original, load, is_jmx_generated):
+    def __get_modified_jmx(self, original, is_jmx_generated):
         """
         add two listeners to test plan:
             - to collect basic stats for KPIs
             - to collect detailed errors/trace info
         :return: path to artifact
         """
-        self.log.debug("Load: %s", load)
+        self.log.debug("Load: %s", self.get_specific_load())
         jmx = JMX(original)
 
         if self.get_scenario().get("disable-listeners", not self.settings.get("gui", False)):
@@ -477,7 +607,8 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         self.__add_result_listeners(jmx)
         if not is_jmx_generated:
             self.__force_tran_parent_sample(jmx)
-            if self.settings.get('version', self.JMETER_VER) >= '3.2':
+            version = LooseVersion(str(self.settings.get('version', self.JMETER_VER)))
+            if version >= LooseVersion("3.2"):
                 self.__force_hc4_cookie_handler(jmx)
         self.__fill_empty_delimiters(jmx)
 
@@ -1376,13 +1507,10 @@ class JMeter(RequiredTool):
         try:
             with tempfile.NamedTemporaryFile(prefix="jmeter", suffix="log", delete=False) as jmlog:
                 jm_proc = shell_exec([self.tool_path, '-j', jmlog.name, '--version'], stderr=subprocess.STDOUT)
-                jmout, jmerr = jm_proc.communicate()
+                jmout, jmerr = communicate(jm_proc)
                 self.log.debug("JMeter check: %s / %s", jmout, jmerr)
 
             os.remove(jmlog.name)
-
-            if isinstance(jmout, binary_type):
-                jmout = jmout.decode()
 
             if "is too low to run JMeter" in jmout:
                 raise ToolError("Java version is too low to run JMeter")
@@ -1392,6 +1520,26 @@ class JMeter(RequiredTool):
         except OSError:
             self.log.debug("JMeter check failed.")
             return False
+
+    def _pmgr_call(self, params):
+        cmd = [self._pmgr_path()] + params
+        proc = shell_exec(cmd)
+        return communicate(proc)
+
+    def install_for_jmx(self, jmx_file):
+        if not os.path.isfile(jmx_file):
+            self.log.warning("Script %s not found" % jmx_file)
+            return
+
+        try:
+            out, err = self._pmgr_call(["install-for-jmx", jmx_file])
+            self.log.debug("Try to detect plugins for %s\n%s\n%s", jmx_file, out, err)
+        except BaseException as exc:
+            self.log.warning("Failed to detect plugins for %s: %s", jmx_file, exc)
+            return
+
+        if err and "Wrong command: install-for-jmx" in err:     # old manager
+            self.log.debug("pmgr can't discover jmx for plugins")
 
     def __install_jmeter(self, dest):
         if self.download_link:
@@ -1430,7 +1578,7 @@ class JMeter(RequiredTool):
         self.log.debug("Trying: %s", cmd)
         try:
             proc = shell_exec(cmd)
-            out, err = proc.communicate()
+            out, err = communicate(proc)
             self.log.debug("Install PluginsManager: %s / %s", out, err)
         except BaseException as exc:
             raise ToolError("Failed to install PluginsManager: %s" % exc)
@@ -1468,10 +1616,14 @@ class JMeter(RequiredTool):
                 env['JVM_ARGS'] = jvm_args
 
             proc = shell_exec(cmd)
-            out, err = proc.communicate()
+            out, err = communicate(proc)
             self.log.debug("Install plugins: %s / %s", out, err)
         except BaseException as exc:
             raise ToolError("Failed to install plugins %s: %s" % (plugin_str, exc))
+
+    def _pmgr_path(self):
+        dest = get_full_path(self.tool_path, step_up=2)
+        return os.path.join(dest, 'bin', 'PluginsManagerCMD' + EXE_SUFFIX)
 
     def install(self):
         dest = get_full_path(self.tool_path, step_up=2)
@@ -1483,7 +1635,7 @@ class JMeter(RequiredTool):
         direct_install_tools = [  # source link and destination
             [JMeterExecutor.PLUGINS_MANAGER, plugins_manager_path],
             [JMeterExecutor.CMDRUNNER, cmdrunner_path]]
-        plugins_manager_cmd = os.path.join(dest, 'bin', 'PluginsManagerCMD' + EXE_SUFFIX)
+        plugins_manager_cmd = self._pmgr_path()
 
         self.__install_jmeter(dest)
         self.__download_additions(direct_install_tools)

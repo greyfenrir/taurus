@@ -8,14 +8,14 @@ ADD https://deb.nodesource.com/setup_6.x /tmp
 RUN apt-get -y update \
   && apt-get -y install --no-install-recommends software-properties-common \
   && apt-add-repository multiverse \
+  && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF \
+  && echo "deb http://download.mono-project.com/repo/ubuntu xenial main" | tee /etc/apt/sources.list.d/mono-official.list \
   && add-apt-repository ppa:yandex-load/main \
   && apt-add-repository ppa:nilarimogard/webupd8 \
   && cat /tmp/linux_signing_key.pub | apt-key add - \
   && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
   && bash /tmp/setup_6.x \
   && apt-get -y update \
-  && apt-get -y install --no-install-recommends \
-    mono-complete \
   && apt-get -y install --no-install-recommends \
     mc \
     tzdata \
@@ -45,7 +45,7 @@ RUN apt-get -y update \
     phantomjs \
     ruby ruby-dev \
     nodejs \
-    nuget \
+    mono-complete nuget \
   && pip install --upgrade setuptools pip \
   && pip install locustio bzt && pip uninstall -y bzt \
   && pip install --upgrade selenium \
@@ -69,7 +69,12 @@ RUN ./build-sdist.sh \
   && echo '{"install-id": "Docker"}' > /etc/bzt.d/99-zinstallID.json \
   && echo '{"settings": {"artifacts-dir": "/tmp/artifacts"}}' > /etc/bzt.d/90-artifacts-dir.json
 
-RUN bzt -install-tools -v && bzt /tmp/bzt-src/examples/all-executors.yml -o settings.artifacts-dir=/tmp/all-executors-artifacts -sequential || (ls -lh /tmp/all-executors-artifacts ; exit 1)
+RUN bzt -install-tools -v && bzt /tmp/bzt-src/examples/all-executors.yml -o settings.artifacts-dir=/tmp/all-executors-artifacts -sequential || (\
+  ls -lh /tmp/all-executors-artifacts; \
+  cat /tmp/all-executors-artifacts/geckodriver.log; \
+  cat /tmp/all-executors-artifacts/nose-1.err; \
+  cat /tmp/all-executors-artifacts/processlist.txt; \
+  exit 1)
 
 RUN mkdir /bzt-configs \
   && rm -rf /tmp/* \

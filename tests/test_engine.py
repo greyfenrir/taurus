@@ -1,9 +1,9 @@
 """ unit test """
 from bzt import TaurusConfigError
-from tests import BZTestCase, __dir__, local_paths_config
+from tests import BZTestCase, local_paths_config, RESOURCES_DIR, BASE_CONFIG
 
 from bzt.engine import ScenarioExecutor
-from bzt.six import string_types
+from bzt.six import string_types, communicate
 from bzt.utils import BetterDict, is_windows
 from tests.mocks import EngineEmul
 
@@ -24,9 +24,9 @@ class TestEngine(BZTestCase):
 
     def test_requests(self):
         configs = [
-            __dir__() + "/../bzt/resources/base-config.yml",
-            __dir__() + "/resources/json/get-post.json",
-            __dir__() + "/resources/json/reporting.json",
+            BASE_CONFIG,
+            RESOURCES_DIR + "json/get-post.json",
+            RESOURCES_DIR + "json/reporting.json",
             self.paths
         ]
         self.obj.configure(configs)
@@ -40,9 +40,9 @@ class TestEngine(BZTestCase):
 
     def test_double_exec(self):
         configs = [
-            __dir__() + "/../bzt/resources/base-config.yml",
-            __dir__() + "/resources/yaml/triple.yml",
-            __dir__() + "/resources/json/reporting.json",
+            BASE_CONFIG,
+            RESOURCES_DIR + "yaml/triple.yml",
+            RESOURCES_DIR + "json/reporting.json",
             self.paths
         ]
         self.obj.configure(configs)
@@ -58,8 +58,8 @@ class TestEngine(BZTestCase):
 
     def test_unknown_module(self):
         configs = [
-            __dir__() + "/../bzt/resources/base-config.yml",
-            __dir__() + "/resources/json/gatling.json",
+            BASE_CONFIG,
+            RESOURCES_DIR + "json/gatling.json",
             self.paths
         ]
         self.obj.configure(configs)
@@ -80,14 +80,14 @@ class TestEngine(BZTestCase):
             },
             "modules": {
                 "local": "bzt.modules.provisioning.Local",
-                "jmeter": "bzt.modules.jmeter.JMeterExecutor",
+                "jmeter": "tests.modules.jmeter.MockJMeterExecutor",
             }})
         self.obj.prepare()
 
     def test_yaml_multi_docs(self):
         configs = [
-            __dir__() + "/../bzt/resources/base-config.yml",
-            __dir__() + "/resources/yaml/multi-docs.yml",
+            BASE_CONFIG,
+            RESOURCES_DIR + "yaml/multi-docs.yml",
             self.paths
         ]
         self.obj.configure(configs)
@@ -96,16 +96,16 @@ class TestEngine(BZTestCase):
 
     def test_json_format_regression(self):
         configs = [
-            __dir__() + "/../bzt/resources/base-config.yml",
-            __dir__() + "/resources/json/json-but-not-yaml.json"
+            BASE_CONFIG,
+            RESOURCES_DIR + "json/json-but-not-yaml.json"
         ]
         self.obj.configure(configs)
         self.obj.prepare()
 
     def test_invalid_format(self):
         configs = [
-            __dir__() + "/../bzt/resources/base-config.yml",
-            __dir__() + "/resources/jmeter-dist-3.0.zip"
+            BASE_CONFIG,
+            RESOURCES_DIR + "jmeter-dist-3.0.zip"
         ]
         self.assertRaises(TaurusConfigError, lambda: self.obj.configure(configs))
 
@@ -131,8 +131,8 @@ class TestScenarioExecutor(BZTestCase):
         self.assertIn('test_blazemeter_fail.py', config['scenarios'])
 
     def test_body_files(self):
-        body_file1 = __dir__() + "/resources/jmeter/body-file.dat"
-        body_file2 = __dir__() + "/resources/jmeter/jmx/http.jmx"
+        body_file1 = RESOURCES_DIR + "jmeter/body-file.dat"
+        body_file2 = RESOURCES_DIR + "jmeter/jmx/http.jmx"
         self.engine.config.merge({
             'execution': [{
                 'iterations': 1,
@@ -209,8 +209,8 @@ class TestScenarioExecutor(BZTestCase):
     def test_passes_artifacts_dir(self):
         cmdline = "echo %TAURUS_ARTIFACTS_DIR%" if is_windows() else "echo $TAURUS_ARTIFACTS_DIR"
         process = self.executor.execute(cmdline, shell=True)
-        stdout, _ = process.communicate()
-        self.assertEquals(self.engine.artifacts_dir, stdout.decode().strip())
+        stdout, _ = communicate(process)
+        self.assertEquals(self.engine.artifacts_dir, stdout.strip())
 
     def test_case_of_variables(self):
         env = {'aaa': 333, 'AAA': 666}
@@ -219,8 +219,8 @@ class TestScenarioExecutor(BZTestCase):
         results = set()
         for cmdline in cmdlines:
             process = self.executor.execute(cmdline, shell=True, env=env)
-            stdout, _ = process.communicate()
-            results.add(stdout.decode().strip())
+            stdout, _ = communicate(process)
+            results.add(stdout.strip())
         if is_windows():
             self.assertEqual(1, len(results))
         else:

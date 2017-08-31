@@ -1,16 +1,15 @@
 import sys
 import time
 
-import os
-from tests import BZTestCase, r, rc, __dir__
+from tests import BZTestCase, r, rc, RESOURCES_DIR
 
 from bzt.engine import Provisioning, ScenarioExecutor
 from bzt.modules.aggregator import DataPoint, KPISet
 from bzt.modules.console import ConsoleStatusReporter
-from bzt.modules.jmeter import JMeterExecutor
 from bzt.modules.provisioning import Local
 from bzt.utils import is_windows, EXE_SUFFIX
 from tests.mocks import EngineEmul
+from tests.modules.jmeter import MockJMeterExecutor
 
 
 class TestConsoleStatusReporter(BZTestCase):
@@ -35,12 +34,9 @@ class TestConsoleStatusReporter(BZTestCase):
         return point
 
     def get_jmeter(self):
-        dir_name = os.path.dirname(__file__)
-        path = dir_name + "/../resources/jmeter/jmeter-loader" + EXE_SUFFIX
-        obj = JMeterExecutor()
-        obj.settings.merge({'path': path})
-        obj.execution.merge({"scenario": {
-            "script": __dir__() + "/../resources/jmeter/jmx/dummy.jmx"}})
+        jmeter_path = RESOURCES_DIR + "jmeter/jmeter-loader" + EXE_SUFFIX
+        script_path = RESOURCES_DIR + "jmeter/jmx/dummy.jmx"
+        obj = MockJMeterExecutor(settings={'path': jmeter_path}, load={"scenario": {"script": script_path}})
         return obj
 
     def test_1(self):
