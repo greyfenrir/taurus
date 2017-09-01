@@ -861,6 +861,8 @@ class TestJMeterExecutor(BZTestCase):
             contents = prop_file.read()
         info = "dist servers: %s" % self.obj.distributed_servers
         info += "\nsettings.gui: %s" % self.obj.settings.get('gui')
+        info += "\nprops_local: %s" % self.obj.props_local
+        info += "\nprops: %s" % self.obj.props
         self.assertIn("remote_hosts=127.0.0.1,127.0.0.2", contents, info)
 
     def test_empty_requests(self):
@@ -895,7 +897,9 @@ class TestJMeterExecutor(BZTestCase):
         target_jmx = os.path.join(self.obj.engine.artifacts_dir, "requests.jmx")
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         jq_css_extractors = modified_xml_tree.findall(".//HtmlExtractor")
-        self.assertEqual(2, len(jq_css_extractors) )
+        content = open(target_jmx, "rb").read()
+        info = "=========requests.jmx\n%s\n==========" % content
+        self.assertEqual(2, len(jq_css_extractors), info)
         simplified_extractor = modified_xml_tree.find(".//HtmlExtractor[@testname='Get name1']")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.refname']").text, "name1")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.expr']").text,
@@ -1375,7 +1379,9 @@ class TestJMeterExecutor(BZTestCase):
         self.obj.post_process()
         with open(os.path.join(self.obj.engine.artifacts_dir, "jmeter.out")) as fds:
             stdout = fds.read()
-        self.assertIn("-Xmx2G", stdout)
+        info = "'-Xmx2G' not found in '%s'" % stdout
+        info += "\nlistdir(%s): %s" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir))
+        self.assertIn("-Xmx2G", stdout, info)
 
     def test_data_sources_in_artifacts(self):
         self.configure({

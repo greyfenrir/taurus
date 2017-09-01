@@ -344,6 +344,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         props_local.update({"jmeterengine.nongui.maxport": self.management_port})
         props_local.update({"jmeter.save.saveservice.timestamp_format": "ms"})
         props_local.update({"sampleresult.default.encoding": "UTF-8"})
+        self.props_local = props_local
         props.merge(props_local)
 
         user_cp = [self.engine.artifacts_dir]
@@ -360,6 +361,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
 
         props['user.classpath'] = os.pathsep.join(user_cp).replace(os.path.sep, "/")  # replace to avoid Windows issue
 
+        self.props = props
         if props:
             self.log.debug("Additional properties: %s", props)
             props_file = self.engine.create_artifact("jmeter-bzt", ".properties")
