@@ -965,12 +965,18 @@ class TestJMeterExecutor(BZTestCase):
         self.assertEqual(full_form.find(".//boolProp[@name='XPath.negate']").text, "true")
 
     def test_jsonpath_assertion(self):
+        listd = []
+        listd.append("before prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
+
         self.configure(json.loads(open(RESOURCES_DIR + "json/get-post.json").read()))
         self.obj.prepare()
+        listd.append("after prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
+
         target_jmx = os.path.join(self.obj.engine.artifacts_dir, "requests.jmx")
         info = target_jmx
         content = open(target_jmx, 'rb').read()
         info += '\n content: %s \n' % content
+        info += "".join(listd)
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         path = ".//com.atlantbh.jmeter.plugins.jsonutils.jsonpathassertion.JSONPathAssertion"
         assertions = modified_xml_tree.findall(path)
@@ -1366,7 +1372,7 @@ class TestJMeterExecutor(BZTestCase):
 
     def test_jvm_heap_settings(self):
         listd = []
-        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
+        listd.append("before prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.configure({
             'execution': {
                 'iterations': 1,
@@ -1376,14 +1382,11 @@ class TestJMeterExecutor(BZTestCase):
                 'jmeter': {
                     'memory-xmx': '2G'}}})
         self.obj.prepare()
-        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
+        listd.append("after prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj._env['TEST_MODE'] = 'heap'
         self.obj.startup()
-        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj.shutdown()
-        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj.post_process()
-        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         with open(os.path.join(self.obj.engine.artifacts_dir, "jmeter.out")) as fds:
             stdout = fds.read()
         info = "'-Xmx2G' not found in '%s'\n" % stdout
@@ -2525,3 +2528,9 @@ class TestJMeterExecutor(BZTestCase):
         })
         self.obj.settings.merge({"version": 3.3})
         self.obj.prepare()
+
+
+        #listd = []
+        #listd.append("before prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
+        #listd.append("after prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
+        #info += "".join(listd)
