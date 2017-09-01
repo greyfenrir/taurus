@@ -898,7 +898,8 @@ class TestJMeterExecutor(BZTestCase):
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         jq_css_extractors = modified_xml_tree.findall(".//HtmlExtractor")
         content = open(target_jmx, "rb").read()
-        info = "=========requests.jmx\n%s\n==========" % content
+        info = "listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir))
+        info += "=========requests.jmx\n%s\n==========" % content
         self.assertEqual(2, len(jq_css_extractors), info)
         simplified_extractor = modified_xml_tree.find(".//HtmlExtractor[@testname='Get name1']")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.refname']").text, "name1")
@@ -1364,6 +1365,8 @@ class TestJMeterExecutor(BZTestCase):
         self.assertEqual(non_parent.text, 'false')
 
     def test_jvm_heap_settings(self):
+        listd = []
+        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.configure({
             'execution': {
                 'iterations': 1,
@@ -1373,14 +1376,18 @@ class TestJMeterExecutor(BZTestCase):
                 'jmeter': {
                     'memory-xmx': '2G'}}})
         self.obj.prepare()
+        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj._env['TEST_MODE'] = 'heap'
         self.obj.startup()
+        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj.shutdown()
+        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj.post_process()
+        listd.append("listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         with open(os.path.join(self.obj.engine.artifacts_dir, "jmeter.out")) as fds:
             stdout = fds.read()
-        info = "'-Xmx2G' not found in '%s'" % stdout
-        info += "\nlistdir(%s): %s" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir))
+        info = "'-Xmx2G' not found in '%s'\n" % stdout
+        info += "".join(listd)
         self.assertIn("-Xmx2G", stdout, info)
 
     def test_data_sources_in_artifacts(self):
