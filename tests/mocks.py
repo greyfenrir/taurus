@@ -28,7 +28,9 @@ class EngineEmul(Engine):
         super(EngineEmul, self).__init__(logging.getLogger(''))
         self.config.get('settings')['artifacts-dir'] = os.path.dirname(__file__) + "/../build/test/%Y-%m-%d_%H-%M-%S.%f"
         self.config.get('settings')['check-updates'] = False
+        self.list_dir = ""
         self.create_artifacts_dir()
+        self.list_dir += "list ard_dir: %s\n" % os.listdir(self.artifacts_dir)
         self.config.merge({"provisioning": "local"})
         self.config.merge({"modules": {"mock": ModuleMock.__module__ + "." + ModuleMock.__name__}})
         self.prepare_exc = None

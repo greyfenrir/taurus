@@ -332,17 +332,20 @@ class Engine(object):
         """
         Create directory for artifacts, directory name based on datetime.now()
         """
+        self.list_dir += "self.artifacts_dir: %s\n" % self.artifacts_dir
+        self.list_dir += "artifacts-dir in settings: %s\n" % str("artifacts-dir" in self.config.get(SETTINGS))
         if not self.artifacts_dir:
             default = "%Y-%m-%d_%H-%M-%S.%f"
             artifacts_dir = self.config.get(SETTINGS).get("artifacts-dir", default)
             self.artifacts_dir = datetime.datetime.now().strftime(artifacts_dir)
 
         self.artifacts_dir = get_full_path(self.artifacts_dir)
-
+        self.list_dir += "new self.artifacts_dir: %s\n" % self.artifacts_dir
         self.log.info("Artifacts dir: %s", self.artifacts_dir)
-
         if not os.path.isdir(self.artifacts_dir):
             os.makedirs(self.artifacts_dir)
+        else:
+            self.list_dir += "artifacts_dir exists\n"
 
         # dump current effective configuration
         dump = self.create_artifact("effective", "")  # TODO: not good since this file not exists

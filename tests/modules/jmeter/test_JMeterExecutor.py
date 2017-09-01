@@ -28,7 +28,7 @@ def get_jmeter(debug=False):
     obj = MockJMeterExecutor()
     obj.engine = EngineEmul()
     obj.settings.merge({'path': path, 'force-ctg': False})
-    list_dir = "list ard_dir: %s" % os.listdir(obj.engine.artifacts_dir)
+    list_dir = obj.engine.list_dir
     if debug:
         return list_dir, obj
     return obj
