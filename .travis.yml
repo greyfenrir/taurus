@@ -15,11 +15,9 @@ matrix:
 #    language: generic
 
 addons:
-  firefox: "54.0"
   apt:
     packages:
       - oracle-java8-set-default
-      - mono-complete
 
 before_install: |
   if [[ $TRAVIS_OS_NAME == 'osx' ]]; then
@@ -30,14 +28,79 @@ before_install: |
   fi
 
 install:
-- mono --version
-- nvm install 4.2
-- nvm use 4.2
-- gem install rspec
 - pip install pip --upgrade
 - pip install -r requirements.txt
-- pip install codecov nose-exclude locustio
-script: coverage run  --source=. `which nosetests` tests -v --exclude-dir=tests/resources
+- pip install codecov nose-exclude
+script:
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
+- nosetests tests/modules/jmeter -v --exclude-dir=tests/resources
 after_success:
-- coverage report -m
 - codecov

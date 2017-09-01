@@ -23,11 +23,14 @@ from tests.mocks import EngineEmul
 from tests.modules.jmeter import MockJMeterExecutor
 
 
-def get_jmeter():
+def get_jmeter(debug=False):
     path = os.path.join(RESOURCES_DIR, "jmeter/jmeter-loader" + EXE_SUFFIX)
     obj = MockJMeterExecutor()
     obj.engine = EngineEmul()
     obj.settings.merge({'path': path, 'force-ctg': False})
+    list_dir = "list ard_dir: %s" % os.listdir(obj.engine.artifacts_dir)
+    if debug:
+        return list_dir, obj
     return obj
 
 
@@ -44,8 +47,7 @@ def set_jmeter_executor_vars(jmeter_vars):
 class TestJMeterExecutor(BZTestCase):
     def setUp(self):
         super(TestJMeterExecutor, self).setUp()
-        self.obj = get_jmeter()
-        self.info = "list ard_dir: %s" % os.listdir(self.obj.engine.artifacts_dir)
+        self.info, self.obj = get_jmeter(debug=True)
 
     def tearDown(self):
         if self.obj.modified_jmx and os.path.exists(self.obj.modified_jmx):
