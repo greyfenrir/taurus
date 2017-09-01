@@ -6,7 +6,7 @@ install:
 #  - choco install firefox -version 54.0
   - "%PYTHON%\\python.exe -m pip install pip --upgrade"
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
-  - "%PYTHON%\\python.exe -m pip install nose-exclude"
+  - "%PYTHON%\\python.exe -m pip install nose-exclude nose-timer"
 #  - set PATH=C:\Ruby22\bin;%PATH%
 
 build: off
@@ -18,16 +18,16 @@ build: off
 #  - rspec --version
 
 test_script:
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
-  - "%PYTHON%\\python.exe -m nose tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
+  - "%PYTHON%\\python.exe -m nose  --with-timer tests/modules/jmeter -v --exclude-dir=tests/resources/"
 
 #after_test:
 #  - "%PYTHON%\\python.exe setup.py clean sdist"
