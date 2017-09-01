@@ -45,6 +45,7 @@ class TestJMeterExecutor(BZTestCase):
     def setUp(self):
         super(TestJMeterExecutor, self).setUp()
         self.obj = get_jmeter()
+        self.info = "list ard_dir: %s" % os.listdir(self.obj.engine.artifacts_dir)
 
     def tearDown(self):
         if self.obj.modified_jmx and os.path.exists(self.obj.modified_jmx):
@@ -859,11 +860,7 @@ class TestJMeterExecutor(BZTestCase):
         self.assertTrue(os.path.exists(prop_file_path))
         with open(prop_file_path) as prop_file:
             contents = prop_file.read()
-        info = "dist servers: %s" % self.obj.distributed_servers
-        info += "\nsettings.gui: %s" % self.obj.settings.get('gui')
-        info += "\nprops_local: %s" % self.obj.props_local
-        info += "\nprops: %s" % self.obj.props
-        self.assertIn("remote_hosts=127.0.0.1,127.0.0.2", contents, info)
+        self.assertIn("remote_hosts=127.0.0.1,127.0.0.2", contents, self.info)
 
     def test_empty_requests(self):
         # https://groups.google.com/forum/#!topic/codename-taurus/iaT6O2UhfBE
@@ -882,11 +879,9 @@ class TestJMeterExecutor(BZTestCase):
             "scenario": {
                 "script": RESOURCES_DIR + "/jmeter/jmx/variable_csv.jmx"}})
         artifacts = os.listdir(self.obj.engine.artifacts_dir)
-        info = "\n artifacts_dir1: %s" % self.obj.engine.artifacts_dir + "\nartifacts1: %s" % artifacts
         self.obj.prepare()
         artifacts = os.listdir(self.obj.engine.artifacts_dir)
-        info += "\n artifacts_dir2: %s" % self.obj.engine.artifacts_dir + "\n artifacts2: %s" % artifacts
-        self.assertEqual(len(artifacts), 5, "find extra ones: %s" % info)  # 2*effective, .properties, .out, .err
+        self.assertEqual(len(artifacts), 5, self.info)  # 2*effective, .properties, .out, .err
         with open(self.obj.modified_jmx) as fds:
             jmx = fds.read()
             self.assertIn('<stringProp name="filename">${root}/csvfile.csv</stringProp>', jmx)
@@ -898,9 +893,7 @@ class TestJMeterExecutor(BZTestCase):
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         jq_css_extractors = modified_xml_tree.findall(".//HtmlExtractor")
         content = open(target_jmx, "rb").read()
-        info = "listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir))
-        info += "=========requests.jmx\n%s\n==========" % content
-        self.assertEqual(2, len(jq_css_extractors), info)
+        self.assertEqual(2, len(jq_css_extractors), self.info)
         simplified_extractor = modified_xml_tree.find(".//HtmlExtractor[@testname='Get name1']")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.refname']").text, "name1")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.expr']").text,
@@ -965,22 +958,13 @@ class TestJMeterExecutor(BZTestCase):
         self.assertEqual(full_form.find(".//boolProp[@name='XPath.negate']").text, "true")
 
     def test_jsonpath_assertion(self):
-        listd = []
-        listd.append("before prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
-
         self.configure(json.loads(open(RESOURCES_DIR + "json/get-post.json").read()))
         self.obj.prepare()
-        listd.append("after prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
-
         target_jmx = os.path.join(self.obj.engine.artifacts_dir, "requests.jmx")
-        info = target_jmx
-        content = open(target_jmx, 'rb').read()
-        info += '\n content: %s \n' % content
-        info += "".join(listd)
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         path = ".//com.atlantbh.jmeter.plugins.jsonutils.jsonpathassertion.JSONPathAssertion"
         assertions = modified_xml_tree.findall(path)
-        self.assertEqual(4, len(assertions), info)
+        self.assertEqual(4, len(assertions), self.info)
 
         vals = [
             {'path': '$.', 'exp_val': None, 'valid': 'false',
@@ -1371,8 +1355,6 @@ class TestJMeterExecutor(BZTestCase):
         self.assertEqual(non_parent.text, 'false')
 
     def test_jvm_heap_settings(self):
-        listd = []
-        listd.append("before prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.configure({
             'execution': {
                 'iterations': 1,
@@ -1382,16 +1364,13 @@ class TestJMeterExecutor(BZTestCase):
                 'jmeter': {
                     'memory-xmx': '2G'}}})
         self.obj.prepare()
-        listd.append("after prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
         self.obj._env['TEST_MODE'] = 'heap'
         self.obj.startup()
         self.obj.shutdown()
         self.obj.post_process()
         with open(os.path.join(self.obj.engine.artifacts_dir, "jmeter.out")) as fds:
             stdout = fds.read()
-        info = "'-Xmx2G' not found in '%s'\n" % stdout
-        info += "".join(listd)
-        self.assertIn("-Xmx2G", stdout, info)
+        self.assertIn("-Xmx2G", stdout, self.info)
 
     def test_data_sources_in_artifacts(self):
         self.configure({
@@ -2528,9 +2507,3 @@ class TestJMeterExecutor(BZTestCase):
         })
         self.obj.settings.merge({"version": 3.3})
         self.obj.prepare()
-
-
-        #listd = []
-        #listd.append("before prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
-        #listd.append("after prepare(): listdir(%s): %s\n" % (self.obj.engine.artifacts_dir, os.listdir(self.obj.engine.artifacts_dir)))
-        #info += "".join(listd)
