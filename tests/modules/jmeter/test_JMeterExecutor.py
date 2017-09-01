@@ -895,7 +895,7 @@ class TestJMeterExecutor(BZTestCase):
         target_jmx = os.path.join(self.obj.engine.artifacts_dir, "requests.jmx")
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         jq_css_extractors = modified_xml_tree.findall(".//HtmlExtractor")
-        self.assertEqual(2, len(jq_css_extractors))
+        self.assertEqual(2, len(jq_css_extractors) )
         simplified_extractor = modified_xml_tree.find(".//HtmlExtractor[@testname='Get name1']")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.refname']").text, "name1")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.expr']").text,
