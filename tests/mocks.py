@@ -26,7 +26,7 @@ except ImportError:
 class EngineEmul(Engine):
     def __init__(self):
         super(EngineEmul, self).__init__(logging.getLogger(''))
-        self.config.get('settings')['artifacts-dir'] = os.path.dirname(__file__) + "/../build/test/%Y-%m-%d_%H-%M-%S.%f"
+        self.config.get('settings')['artifacts-dir'] = os.path.dirname(__file__) + "/../build/test/jm"
         self.config.get('settings')['check-updates'] = False
         self.list_dir = ""
         self.create_artifacts_dir()

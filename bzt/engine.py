@@ -342,6 +342,9 @@ class Engine(object):
         self.artifacts_dir = get_full_path(self.artifacts_dir)
         self.list_dir += "new self.artifacts_dir: %s\n" % self.artifacts_dir
         self.log.info("Artifacts dir: %s", self.artifacts_dir)
+
+        #art_dir = get_uniq_name()
+
         if not os.path.isdir(self.artifacts_dir):
             os.makedirs(self.artifacts_dir)
         else:
