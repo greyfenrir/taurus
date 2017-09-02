@@ -18,15 +18,19 @@ from bzt.jmx.tools import JMeterScenarioBuilder
 from bzt.modules.provisioning import Local
 from bzt.six import etree, u
 from bzt.utils import EXE_SUFFIX, get_full_path, BetterDict
-from tests import BZTestCase, __dir__, RESOURCES_DIR
+from tests import BZTestCase, RESOURCES_DIR, BUILD_DIR
 from tests.mocks import EngineEmul
+from tests.modules.jmeter import MockJMeterExecutor
 
 
-def get_jmeter():
+def get_jmeter(debug=False):
     path = os.path.join(RESOURCES_DIR, "jmeter/jmeter-loader" + EXE_SUFFIX)
-    obj = JMeterExecutor()
+    obj = MockJMeterExecutor()
     obj.engine = EngineEmul()
     obj.settings.merge({'path': path, 'force-ctg': False})
+    list_dir = obj.engine.list_dir
+    if debug:
+        return list_dir, obj
     return obj
 
 
@@ -43,7 +47,7 @@ def set_jmeter_executor_vars(jmeter_vars):
 class TestJMeterExecutor(BZTestCase):
     def setUp(self):
         super(TestJMeterExecutor, self).setUp()
-        self.obj = get_jmeter()
+        self.info, self.obj = get_jmeter(debug=True)
 
     def tearDown(self):
         if self.obj.modified_jmx and os.path.exists(self.obj.modified_jmx):
@@ -191,14 +195,14 @@ class TestJMeterExecutor(BZTestCase):
         self.obj.execution.merge({"scenario":
                                       {"requests": ["http://localhost"],
                                        "data-sources": [
-                                           {"path": "${some_jmeter_variable}"}]}})
+                                           {"path": "/before/${some_jmeter_variable}/after"}]}})
         self.obj.prepare()
 
         xml_tree = etree.fromstring(open(self.obj.modified_jmx, "rb").read())
         elements = xml_tree.findall(".//CSVDataSet[@testclass='CSVDataSet']")
         self.assertEqual(1, len(elements))
         element = elements[0]
-        self.assertEqual("${some_jmeter_variable}", element.find(".//stringProp[@name='filename']").text)
+        self.assertEqual("/before/${some_jmeter_variable}/after", element.find(".//stringProp[@name='filename']").text)
         self.assertEqual(",", element.find(".//stringProp[@name='delimiter']").text)
 
     def test_datasources_wrong_path(self):
@@ -256,8 +260,8 @@ class TestJMeterExecutor(BZTestCase):
         self.assertEqual(fake.tool_path, os.path.join('*', end_str))
 
     def test_install_jmeter_2_13(self):
-
-        path = os.path.abspath(__dir__() + "/../../build/tmp/jmeter-taurus/bin/jmeter" + EXE_SUFFIX)
+        path = os.path.abspath(BUILD_DIR + "jmeter-taurus/bin/jmeter" + EXE_SUFFIX)
+        self.obj.mock_install = False
 
         shutil.rmtree(os.path.dirname(os.path.dirname(path)), ignore_errors=True)
         self.assertFalse(os.path.exists(path))
@@ -300,7 +304,8 @@ class TestJMeterExecutor(BZTestCase):
             set_jmeter_executor_vars(jmeter_vars)
 
     def test_install_jmeter_3_0(self):
-        path = os.path.abspath(__dir__() + "/../../build/tmp/jmeter-taurus/bin/jmeter" + EXE_SUFFIX)
+        path = os.path.abspath(BUILD_DIR + "jmeter-taurus/bin/jmeter" + EXE_SUFFIX)
+        self.obj.mock_install = False
 
         shutil.rmtree(os.path.dirname(os.path.dirname(path)), ignore_errors=True)
         self.assertFalse(os.path.exists(path))
@@ -857,7 +862,7 @@ class TestJMeterExecutor(BZTestCase):
         self.assertTrue(os.path.exists(prop_file_path))
         with open(prop_file_path) as prop_file:
             contents = prop_file.read()
-        self.assertIn("remote_hosts=127.0.0.1,127.0.0.2", contents)
+        self.assertIn("remote_hosts=127.0.0.1,127.0.0.2", contents, self.info)
 
     def test_empty_requests(self):
         # https://groups.google.com/forum/#!topic/codename-taurus/iaT6O2UhfBE
@@ -875,9 +880,10 @@ class TestJMeterExecutor(BZTestCase):
         self.obj.execution.merge({
             "scenario": {
                 "script": RESOURCES_DIR + "/jmeter/jmx/variable_csv.jmx"}})
+        artifacts = os.listdir(self.obj.engine.artifacts_dir)
         self.obj.prepare()
         artifacts = os.listdir(self.obj.engine.artifacts_dir)
-        self.assertEqual(len(artifacts), 5)  # 2*effective, .properties, .out, .err
+        self.assertEqual(len(artifacts), 5, self.info)  # 2*effective, .properties, .out, .err
         with open(self.obj.modified_jmx) as fds:
             jmx = fds.read()
             self.assertIn('<stringProp name="filename">${root}/csvfile.csv</stringProp>', jmx)
@@ -888,7 +894,8 @@ class TestJMeterExecutor(BZTestCase):
         target_jmx = os.path.join(self.obj.engine.artifacts_dir, "requests.jmx")
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         jq_css_extractors = modified_xml_tree.findall(".//HtmlExtractor")
-        self.assertEqual(2, len(jq_css_extractors))
+        content = open(target_jmx, "rb").read()
+        self.assertEqual(2, len(jq_css_extractors), self.info)
         simplified_extractor = modified_xml_tree.find(".//HtmlExtractor[@testname='Get name1']")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.refname']").text, "name1")
         self.assertEqual(simplified_extractor.find(".//stringProp[@name='HtmlExtractor.expr']").text,
@@ -959,7 +966,7 @@ class TestJMeterExecutor(BZTestCase):
         modified_xml_tree = etree.fromstring(open(target_jmx, "rb").read())
         path = ".//com.atlantbh.jmeter.plugins.jsonutils.jsonpathassertion.JSONPathAssertion"
         assertions = modified_xml_tree.findall(path)
-        self.assertEqual(4, len(assertions))
+        self.assertEqual(4, len(assertions), self.info)
 
         vals = [
             {'path': '$.', 'exp_val': None, 'valid': 'false',
@@ -1365,7 +1372,7 @@ class TestJMeterExecutor(BZTestCase):
         self.obj.post_process()
         with open(os.path.join(self.obj.engine.artifacts_dir, "jmeter.out")) as fds:
             stdout = fds.read()
-        self.assertIn("-Xmx2G", stdout)
+        self.assertIn("-Xmx2G", stdout, self.info)
 
     def test_data_sources_in_artifacts(self):
         self.configure({
@@ -2103,6 +2110,38 @@ class TestJMeterExecutor(BZTestCase):
         samples = list(obj.read(last_pass=True))
         self.assertNotEqual(len(samples), 0)
 
+    def test_detect_ver_empty(self):
+        self.obj.execution.merge({
+            'scenario': {
+                "requests": [
+                    "http://example.com/"]}})
+        self.obj.settings.merge({"version": "auto"})
+        self.obj.prepare()
+        self.assertEqual(self.obj.JMETER_VER, self.obj.version)
+
+    def test_detect_ver_wrong(self):
+        self.obj.execution.merge({
+            'scenario': {
+                "script": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"}})
+        self.obj.settings.merge({"version": "auto"})
+        self.obj.prepare()
+        self.assertEqual(self.obj.JMETER_VER, self.obj.version)
+
+    def test_detect_ver_2_13(self):
+        self.obj.execution.merge({
+            'scenario': {
+                "script": RESOURCES_DIR + "/jmeter/jmx/SteppingThreadGroup.jmx"}})
+        self.obj.settings.merge({"version": "auto"})
+        self.obj.prepare()
+        self.assertEqual("2.13", self.obj.version)
+
+    def test_no_detect_2_13(self):
+        self.obj.execution.merge({
+            'scenario': {
+                "script": RESOURCES_DIR + "/jmeter/jmx/SteppingThreadGroup.jmx"}})
+        self.obj.prepare()
+        self.assertEqual(self.obj.JMETER_VER, self.obj.version)
+
     def test_jsr223_block(self):
         script = RESOURCES_DIR + "/jmeter/jsr223_script.js"
         self.configure({
@@ -2458,3 +2497,15 @@ class TestJMeterExecutor(BZTestCase):
         self.assertNotIn("LOG DEBUG: 1", diag_str)
         self.assertIn("LOG ERROR: 2", diag_str)
         self.assertIn("LOG DEBUG: 3", diag_str)
+
+    def test_jmeter_version_comp(self):
+        self.configure({
+            "execution": {
+                "iterations": 1,
+                "scenario": {
+                    "script": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"
+                }
+            }
+        })
+        self.obj.settings.merge({"version": 3.3})
+        self.obj.prepare()

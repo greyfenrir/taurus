@@ -22,13 +22,14 @@ import subprocess
 import time
 import zipfile
 import json
+from bzt.six import communicate
 
 try:
     from pyvirtualdisplay.smartdisplay import SmartDisplay as Display
 except ImportError:
     from pyvirtualdisplay import Display
 
-from bzt import NormalShutdown, ToolError, TaurusConfigError, TaurusInternalException, ManualShutdown
+from bzt import NormalShutdown, ToolError, TaurusConfigError, TaurusInternalException
 from bzt.engine import Service, HavingInstallableTools, Singletone
 from bzt.six import get_stacktrace, urlopen, URLError
 from bzt.utils import get_full_path, shutdown_process, shell_exec, RequiredTool, is_windows
@@ -145,7 +146,7 @@ class AndroidEmulatorLoader(Service):
         self.log.debug("Trying: %s", cmd)
         try:
             proc = shell_exec(cmd)
-            out, _ = proc.communicate()
+            out, _ = communicate(proc)
             return out.strip() == '1'
         except BaseException as exc:
             raise ToolError('Checking if android emulator starts is impossible: %s', exc)

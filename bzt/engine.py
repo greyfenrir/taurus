@@ -332,17 +332,23 @@ class Engine(object):
         """
         Create directory for artifacts, directory name based on datetime.now()
         """
+        self.list_dir += "self.artifacts_dir: %s\n" % self.artifacts_dir
+        self.list_dir += "artifacts-dir in settings: %s\n" % str("artifacts-dir" in self.config.get(SETTINGS))
         if not self.artifacts_dir:
             default = "%Y-%m-%d_%H-%M-%S.%f"
             artifacts_dir = self.config.get(SETTINGS).get("artifacts-dir", default)
             self.artifacts_dir = datetime.datetime.now().strftime(artifacts_dir)
 
         self.artifacts_dir = get_full_path(self.artifacts_dir)
-
+        self.list_dir += "new self.artifacts_dir: %s\n" % self.artifacts_dir
         self.log.info("Artifacts dir: %s", self.artifacts_dir)
+
+        #art_dir = get_uniq_name()
 
         if not os.path.isdir(self.artifacts_dir):
             os.makedirs(self.artifacts_dir)
+        else:
+            self.list_dir += "artifacts_dir exists\n"
 
         # dump current effective configuration
         dump = self.create_artifact("effective", "")  # TODO: not good since this file not exists
@@ -867,6 +873,7 @@ class ScenarioExecutor(EngineModule):
     THRPT = "throughput"
     EXEC = "execution"
     STEPS = "steps"
+    LOAD_FMT = namedtuple("LoadSpec", "concurrency throughput ramp_up hold iterations duration steps")
 
     def __init__(self):
         super(ScenarioExecutor, self).__init__()
@@ -986,12 +993,8 @@ class ScenarioExecutor(EngineModule):
         if msg:
             raise TaurusConfigError(msg)
 
-        res = namedtuple("LoadSpec",
-                         ('concurrency', "throughput", 'ramp_up', 'hold', 'iterations', 'duration', 'steps'))
-
-        return res(concurrency=concurrency, ramp_up=ramp_up,
-                   throughput=throughput, hold=hold, iterations=iterations,
-                   duration=duration, steps=steps)
+        return self.LOAD_FMT(concurrency=concurrency, ramp_up=ramp_up, throughput=throughput, hold=hold,
+                             iterations=iterations, duration=duration, steps=steps)
 
     def get_resource_files(self):
         files_list = []
