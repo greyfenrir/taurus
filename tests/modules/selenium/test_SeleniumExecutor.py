@@ -11,8 +11,8 @@ from bzt.engine import ScenarioExecutor
 from bzt.modules.functional import LoadSamplesReader, FuncSamplesReader
 from bzt.modules.provisioning import Local
 from bzt.modules.python import ApiritifNoseExecutor
-from bzt.six import StringIO
-from bzt.utils import LDJSONReader
+from bzt.six import BytesIO
+from bzt.utils import LDJSONReader, FileReader
 from tests import BZTestCase, RESOURCES_DIR
 from tests.mocks import EngineEmul
 from tests.modules.selenium import SeleniumTestCase
@@ -113,9 +113,9 @@ class TestSeleniumStuff(SeleniumTestCase):
         while not self.obj.check():
             time.sleep(1)
         self.obj.shutdown()
-        with open(os.path.join(self.obj.engine.artifacts_dir, "apiritif-0.csv")) as fds:
-            lines = fds.readlines()
-            self.assertEquals(4, len(lines))
+        reader = FileReader(os.path.join(self.obj.engine.artifacts_dir, "apiritif-0.csv"))
+        lines = reader.get_lines(last_pass=True)
+        self.assertEquals(4, len(list(lines)))
 
     def test_fail_on_zero_results(self):
         self.configure(yaml.load(open(RESOURCES_DIR + "yaml/selenium_executor_requests.yml").read()))
@@ -135,40 +135,6 @@ class TestSeleniumStuff(SeleniumTestCase):
                     "http://blazedemo.com"]}})
         resources = self.obj.resource_files()
         self.assertEqual(0, len(resources))
-
-    def test_labels_translation(self):
-        self.configure({
-            "scenarios": {
-                "req_sel": {
-                    "requests": [
-                        "http://blazedemo.com",
-                        {
-                            'url': 'http://blazemeter.com',
-                            'label': 'Main Page'
-                        }]}}})
-        self.obj.execution.merge({
-            "scenario": "req_sel"})
-        self.obj.prepare()
-        name1 = 'test_00000_http_blazedemo_com'
-        name2 = 'test_00001_Main_Page'
-        name3 = 'test_00002_just_for_lulz'
-        reader = self.obj.runner.reader
-        reader.report_reader.json_reader = LDJSONReaderEmul()
-        reader.report_reader.json_reader.data.extend([
-            {
-                'test_case': name1, 'start_time': 1472049887, 'duration': 1.0, 'status': 'PASSED',
-                'test_suite': 'Tests', 'error_msg': None, 'error_trace': None, 'extras': None,
-            }, {
-                'test_case': name2, 'start_time': 1472049888, 'duration': 1.0, 'status': 'PASSED',
-                'test_suite': 'Tests', 'error_msg': None, 'error_trace': None, 'extras': None,
-            }, {
-                'test_case': name3, 'start_time': 1472049889, 'duration': 1.0, 'status': 'PASSED',
-                'test_suite': 'Tests', 'error_msg': None, 'error_trace': None, 'extras': None,
-            }])
-        res = list(reader._read())
-        self.assertIn('http_blazedemo_com', res[0])
-        self.assertIn('Main_Page', res[1])
-        self.assertIn('just_for_lulz', res[2])
 
     def test_dont_copy_local_script_to_artifacts(self):
         "ensures that .java file is not copied into artifacts-dir"
@@ -239,8 +205,8 @@ class TestSeleniumStuff(SeleniumTestCase):
                 'script': RESOURCES_DIR + 'selenium/junit/jar/dummy.jar',
                 'runner': 'junit',
                 'additional-classpath': [RESOURCES_DIR + 'selenium/junit/jar/another_dummy.jar']}})
-        self.obj.settings.merge({
-            'selenium-tools': {
+        self.obj.engine.config.merge({
+            'modules': {
                 'junit': {
                     'additional-classpath': [RESOURCES_DIR + 'selenium/testng/jars/testng-suite.jar']}}})
         own_resources = self.obj.resource_files()
@@ -251,9 +217,12 @@ class TestSeleniumStuff(SeleniumTestCase):
         self.assertEqual(len(all_resources), 3)
 
     def test_add_env_path(self):
-        self.obj.add_env({"PATH": os.pathsep.join(["foo", "bar"])})
-        self.obj.add_env({"PATH": os.pathsep.join(["bar", "baz"])})
-        self.assertEqual(self.obj.additional_env, {"PATH": os.pathsep.join(["foo", "bar", "baz"])})
+        path1 = os.path.join("foo", "bar")
+        path2 = os.path.join("bar", "baz")
+        self.obj.env.add_path({"PATH": path1})
+        self.obj.env.add_path({"PATH": path2})
+        self.assertIn(path1, self.obj.env.get("PATH"))
+        self.assertIn(path2, self.obj.env.get("PATH"))
 
 
 class TestReportReader(BZTestCase):
@@ -271,11 +240,12 @@ class TestReportReader(BZTestCase):
         self.assertEqual(items[3][6], 'UNKNOWN')
 
     def test_reader_buffering(self):
-        first_part = '{"a": 1, "b": 2}\n{"a": 2,'
-        second_part = '"b": 3}\n{"a": 3, "b": 4}\n'
+        first_part = b'{"a": 1, "b": 2}\n{"a": 2,'
+        second_part = b'"b": 3}\n{"a": 3, "b": 4}\n'
         reader = LDJSONReader("yip", logging.getLogger())
-        buffer = StringIO(first_part)
-        reader.fds = buffer
+        buffer = BytesIO(first_part)
+        reader.file.fds = buffer
+        reader.file.fds.name = "yip"
 
         items = list(reader.read(last_pass=False))
         self.assertEqual(len(items), 1)

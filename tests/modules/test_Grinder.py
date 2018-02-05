@@ -5,7 +5,7 @@ import time
 
 import os
 from bzt import ToolError
-from tests import BZTestCase, RESOURCES_DIR, BUILD_DIR
+from tests import BZTestCase, RESOURCES_DIR, BUILD_DIR, close_reader_file
 
 from bzt.modules.aggregator import DataPoint, KPISet
 from bzt.modules.grinder import GrinderExecutor, DataLogReader
@@ -17,6 +17,7 @@ from tests.mocks import EngineEmul
 def get_grinder():
     obj = GrinderExecutor()
     obj.engine = EngineEmul()
+    obj.env = obj.engine.env
     obj.settings.merge({'path': RESOURCES_DIR + "grinder/fake_grinder.jar"})
     return obj
 
@@ -31,8 +32,7 @@ class TestGrinderExecutor(BZTestCase):
             self.obj.stdout_file.close()
         if self.obj.stderr_file:
             self.obj.stderr_file.close()
-        if self.obj.reader and self.obj.reader.fds:
-            self.obj.reader.fds.close()
+        close_reader_file(self.obj.reader)
         super(TestGrinderExecutor, self).tearDown()
 
     def test_install_Grinder(self):
@@ -131,12 +131,12 @@ class TestGrinderExecutor(BZTestCase):
         self.obj.execution.merge({"concurrency": {"local": 2},
                                   "hold-for": 5,
                                   "scenario": {"keepalive": False, "requests": ['http://blazedemo.com']}})
+        old_cp = self.obj.env.get("CLASSPATH")
         self.obj.prepare()
 
-        self.assertEqual(len(self.obj.cmd_line), 5)
-        cmd_line = ' '.join(self.obj.cmd_line)
-        self.assertTrue(cmd_line.startswith('java -classpath'))
-        self.assertNotEqual(cmd_line.find('net.grinder.Grinder'), -1)
+        self.assertEqual(len(self.obj.cmd_line), 3)
+        self.assertNotEqual(old_cp, self.obj.env.get('CLASSPATH'))
+        self.assertIn('net.grinder.Grinder', self.obj.cmd_line)
 
         try:
             self.obj.cmd_line = RESOURCES_DIR + "grinder/grinder" + EXE_SUFFIX

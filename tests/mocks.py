@@ -13,7 +13,7 @@ from bzt.engine import Provisioning, ScenarioExecutor, Reporter
 from bzt.modules.aggregator import ResultsReader, AggregatorListener
 from bzt.modules.functional import FunctionalResultsReader
 from bzt.six import b
-from bzt.utils import load_class, to_json, get_full_path, get_uniq_name
+from bzt.utils import load_class, to_json, get_full_path, get_uniq_name, FileReader, is_windows
 from . import random_sample, TEST_DIR
 
 try:
@@ -23,18 +23,26 @@ except ImportError:
     from builtins import KeyboardInterrupt
 
 
+class MockFileReader(FileReader):
+    SYS_ENCODING = 'cp1251' if is_windows() else 'utf-8'
+
+
 class EngineEmul(Engine):
     def __init__(self):
         super(EngineEmul, self).__init__(logging.getLogger(''))
 
         directory = get_full_path(TEST_DIR)
         prefix = datetime.datetime.now().strftime(self.ARTIFACTS_DIR)
-        self.config.get('settings')['artifacts-dir'] = get_uniq_name(directory=directory, prefix=prefix)
+        self.config.merge({
+            "provisioning": "local",
+            "modules": {
+                "mock": ModuleMock.__module__ + "." + ModuleMock.__name__,
+                "local": ModuleMock.__module__ + "." + ModuleMock.__name__},
+            "settings": {
+                "check-updates": False,
+                "artifacts-dir": get_uniq_name(directory=directory, prefix=prefix)}})
 
-        self.config.get('settings')['check-updates'] = False
         self.create_artifacts_dir()
-        self.config.merge({"provisioning": "local"})
-        self.config.merge({"modules": {"mock": ModuleMock.__module__ + "." + ModuleMock.__name__}})
         self.prepare_exc = None
         self.was_finalize = False
 

@@ -19,12 +19,13 @@ import copy
 import logging
 import os
 import platform
+import re
 import sys
 import time
 import traceback
 import zipfile
 from abc import abstractmethod
-from collections import defaultdict, OrderedDict, Counter
+from collections import defaultdict, OrderedDict, Counter, namedtuple
 from functools import wraps
 from ssl import SSLError
 
@@ -34,15 +35,14 @@ from urwid import Pile, Text
 
 from bzt import AutomatedShutdown
 from bzt import TaurusInternalException, TaurusConfigError, TaurusException, TaurusNetworkError, NormalShutdown
-from bzt.bza import User, Session, Test, Workspace
+from bzt.bza import User, Session, Test, Workspace, MultiTest
 from bzt.engine import Reporter, Provisioning, ScenarioExecutor, Configuration, Service, Singletone
 from bzt.modules.aggregator import DataPoint, KPISet, ConsolidatingAggregator, ResultsProvider, AggregatorListener
-from bzt.modules.chrome import ChromeProfiler
 from bzt.modules.console import WidgetProvider, PrioritizedWidget
 from bzt.modules.functional import FunctionalResultsReader, FunctionalAggregator, FunctionalSample
 from bzt.modules.monitoring import Monitoring, MonitoringListener
 from bzt.modules.services import Unpacker
-from bzt.six import BytesIO, iteritems, HTTPError, r_input, URLError, b
+from bzt.six import BytesIO, iteritems, HTTPError, r_input, URLError, b, string_types, text_type
 from bzt.utils import open_browser, get_full_path, get_files_recursive, replace_in_config, humanize_bytes, \
     ExceptionalDownloader, ProgressBarContext
 from bzt.utils import to_json, dehumanize_time, BetterDict, ensure_is_dict
@@ -56,11 +56,16 @@ CLOUD_CONFIG_FILTER_RULES = {
     "locations": True,
     "locations-weighted": True,
 
+    "settings": {
+        "verbose": True
+    },
+
     "modules": {
         "jmeter": {
             "version": True,
             "properties": True,
             "system-properties": True,
+            "xml-jtl-flags": True,
         },
         "gatling": {
             "version": True,
@@ -109,7 +114,9 @@ CLOUD_CONFIG_FILTER_RULES = {
             "check-interval": True,
             "detach": True,
         },
-        # TODO: aggregator has plenty of relevant settings
+        "consolidator": {
+            "rtimes-len": True
+        },
     }
 }
 
@@ -138,6 +145,25 @@ def send_with_retry(method):
     return _impl
 
 
+def parse_blazemeter_test_link(link):
+    """
+    https://a.blazemeter.com/app/#/accounts/97961/workspaces/89846/projects/229969/tests/5823512
+
+    :param link:
+    :return:
+    """
+    if not isinstance(link, (string_types, text_type)):
+        return None
+
+    regex = r'https://a.blazemeter.com/app/#/accounts/(\d+)/workspaces/(\d+)/projects/(\d+)/tests/(\d+)(?:/\w+)?'
+    match = re.match(regex, link)
+    if match is None:
+        return None
+
+    TestParams = namedtuple('TestParams', 'account_id,workspace_id,project_id,test_id')
+    return TestParams(*[int(x) for x in match.groups()])
+
+
 class BlazeMeterUploader(Reporter, AggregatorListener, MonitoringListener, Singletone):
     """
     Reporter class
@@ -156,8 +182,6 @@ class BlazeMeterUploader(Reporter, AggregatorListener, MonitoringListener, Singl
         self.upload_artifacts = True
         self.send_monitoring = True
         self.monitoring_buffer = None
-        self.send_custom_metrics = False
-        self.send_custom_tables = False
         self.public_report = False
         self.last_dispatch = 0
         self.results_url = None
@@ -177,8 +201,6 @@ class BlazeMeterUploader(Reporter, AggregatorListener, MonitoringListener, Singl
         super(BlazeMeterUploader, self).prepare()
         self.send_interval = dehumanize_time(self.settings.get("send-interval", self.send_interval))
         self.send_monitoring = self.settings.get("send-monitoring", self.send_monitoring)
-        self.send_custom_metrics = self.settings.get("send-custom-metrics", self.send_custom_metrics)
-        self.send_custom_tables = self.settings.get("send-custom-tables", self.send_custom_tables)
         monitoring_buffer_limit = self.settings.get("monitoring-buffer-limit", 500)
         self.monitoring_buffer = MonitoringBuffer(monitoring_buffer_limit, self.log)
         self.browser_open = self.settings.get("browser-open", self.browser_open)
@@ -354,12 +376,6 @@ class BlazeMeterUploader(Reporter, AggregatorListener, MonitoringListener, Singl
 
             if self.send_monitoring:
                 self.__send_monitoring()
-
-            if self.send_custom_metrics:
-                self.__send_custom_metrics()
-
-            if self.send_custom_tables:
-                self.__send_custom_tables()
         finally:
             self._postproc_phase2()
 
@@ -444,8 +460,6 @@ class BlazeMeterUploader(Reporter, AggregatorListener, MonitoringListener, Singl
 
             if self.send_monitoring:
                 self.__send_monitoring()
-            if self.send_custom_metrics:
-                self.__send_custom_metrics()
         return super(BlazeMeterUploader, self).check()
 
     @send_with_retry
@@ -482,83 +496,6 @@ class BlazeMeterUploader(Reporter, AggregatorListener, MonitoringListener, Singl
             engine_id = "0"
         data = self.monitoring_buffer.get_monitoring_json(self._session)
         self._session.send_monitoring_data(engine_id, data)
-
-    @send_with_retry
-    def __send_custom_metrics(self):
-        data = self.get_custom_metrics_json()
-        self._master.send_custom_metrics(data)
-
-    @send_with_retry
-    def __send_custom_tables(self):
-        data = self.get_custom_tables_json()
-        if not data:
-            return
-        self._master.send_custom_tables(data)
-
-    def get_custom_metrics_json(self):
-        datapoints = {}
-
-        for source, buff in iteritems(self.monitoring_buffer.data):
-            for timestamp, item in iteritems(buff):
-                if source == 'local':
-                    source = platform.node()
-
-                if timestamp not in datapoints:
-                    datapoints[timestamp] = {}
-
-                for field, value in iteritems(item):
-                    if field in ('ts', 'interval'):
-                        continue
-                    if source == 'chrome':
-                        if field.startswith("time"):
-                            prefix = "Time"
-                        elif field.startswith("network"):
-                            prefix = "Network"
-                        elif field.startswith("dom"):
-                            prefix = "DOM"
-                        elif field.startswith("js"):
-                            prefix = "JS"
-                        elif field.startswith("memory"):
-                            prefix = "Memory"
-                        else:
-                            prefix = "Metrics"
-                        field = self.get_chrome_metric_kpi_label(field)
-                    else:
-                        if field.lower().startswith('cpu'):
-                            prefix = 'System'
-                            field = 'CPU'
-                        elif field.lower().startswith('mem'):
-                            prefix = 'System'
-                            field = 'Memory'
-                            value *= 100
-                        elif field.lower().startswith('disk'):
-                            prefix = 'Disk'
-                        elif field.lower().startswith('bytes-') or field.lower().startswith('net'):
-                            prefix = 'Network'
-                        else:
-                            prefix = 'Monitoring'
-
-                    label = "/".join([source, prefix, field])
-                    datapoints[timestamp][label] = value
-
-        results = []
-        for timestamp in sorted(datapoints):
-            datapoint = OrderedDict([(metric, datapoints[timestamp][metric])
-                                     for metric in sorted(datapoints[timestamp])])
-            datapoint["ts"] = timestamp
-            results.append(datapoint)
-        return {"datapoints": results}
-
-    def get_chrome_metric_kpi_label(self, metric):
-        for module in self.engine.services:
-            if isinstance(module, ChromeProfiler):
-                return module.get_metric_label(metric)
-        return metric
-
-    def get_custom_tables_json(self):
-        for module in self.engine.services:
-            if isinstance(module, ChromeProfiler):
-                return module.get_custom_tables_json()
 
     def __format_listing(self, zip_listing):
         lines = []
@@ -884,7 +821,7 @@ class ProjectFinder(object):
         if isinstance(proj_name, (int, float)):  # TODO: what if it's string "123"?
             proj_id = int(proj_name)
             self.log.debug("Treating project name as ID: %s", proj_id)
-            project = self.workspaces.projects(proj_id=proj_id).first()
+            project = self.workspaces.projects(ident=proj_id).first()
             if not project:
                 raise TaurusConfigError("BlazeMeter project not found by ID: %s" % proj_id)
             return project
@@ -916,59 +853,153 @@ class ProjectFinder(object):
 
         return test
 
+    def resolve_account(self, account_name):
+        account = None
+
+        if isinstance(account_name, (int, float)):  # TODO: what if it's string "123"?
+            acc_id = int(account_name)
+            self.log.debug("Treating account name as ID: %s", acc_id)
+            account = self.user.accounts(ident=acc_id).first()
+            if not account:
+                raise TaurusConfigError("BlazeMeter account not found by ID: %s" % acc_id)
+        elif account_name is not None:
+            account = self.user.accounts(name=account_name).first()
+            if not account:
+                raise TaurusConfigError("BlazeMeter account not found by ID: %s" % account_name)
+
+        if account is None:
+            account = self.user.accounts().first()
+            self.log.debug("Using first account: %s" % account)
+
+        return account
+
+    def resolve_workspace(self, account, workspace_name):
+        workspace = None
+
+        if isinstance(workspace_name, (int, float)):  # TODO: what if it's string "123"?
+            workspace_id = int(workspace_name)
+            self.log.debug("Treating workspace name as ID: %s", workspace_id)
+            workspace = account.workspaces(ident=workspace_id).first()
+            if not workspace:
+                raise TaurusConfigError("BlazeMeter workspace not found by ID: %s" % workspace_id)
+        elif workspace_name is not None:
+            workspace = account.workspaces(name=workspace_name).first()
+            if not workspace:
+                raise TaurusConfigError("BlazeMeter workspace not found: %s" % workspace_name)
+
+        if workspace is None:
+            workspace = account.workspaces().first()
+            self.log.debug("Using first workspace: %s" % workspace)
+
+        return workspace
+
+    def resolve_project(self, workspace, project_name):
+        project = None
+
+        if isinstance(project_name, (int, float)):  # TODO: what if it's string "123"?
+            proj_id = int(project_name)
+            self.log.debug("Treating project name as ID: %s", proj_id)
+            project = workspace.projects(ident=proj_id).first()
+            if not project:
+                raise TaurusConfigError("BlazeMeter project not found by ID: %s" % proj_id)
+        elif project_name is not None:
+            project = workspace.projects(name=project_name).first()
+
+        if project is None:
+            project = self._create_project_or_use_default(workspace, project_name)
+
+        return project
+
+    def resolve_test(self, project, test_name, taurus_only=False):
+        test = None
+
+        is_int = isinstance(test_name, (int, float))
+        is_digit = isinstance(test_name, (string_types, text_type)) and test_name.isdigit()
+        test_type = TAURUS_TEST_TYPE if taurus_only else None
+        if is_int or is_digit:
+            test_id = int(test_name)
+            self.log.debug("Treating project name as ID: %s", test_id)
+            test = project.multi_tests(ident=test_id).first()
+            if not test:
+                test = project.tests(ident=test_id, test_type=test_type).first()
+            if not test:
+                raise TaurusConfigError("BlazeMeter test not found by ID: %s" % test_id)
+        elif test_name is not None:
+            test = project.multi_tests(name=test_name).first()
+            if not test:
+                test = project.tests(name=test_name, test_type=test_type).first()
+
+        return test
+
     def resolve_test_type(self):
         use_deprecated = self.settings.get("use-deprecated-api", True)
         default_location = self.settings.get("default-location", None)
-        cloud_mode = self.settings.get("cloud-mode", None)
-        proj_name = self.parameters.get("project", self.settings.get("project", None))
+        account_name = self.parameters.get("account", self.settings.get("account", None))
+        workspace_name = self.parameters.get("workspace", self.settings.get("workspace", None))
+        project_name = self.parameters.get("project", self.settings.get("project", None))
         test_name = self.parameters.get("test", self.settings.get("test", self.default_test_name))
         launch_existing_test = self.settings.get("launch-existing-test", False)
+        send_report_email = self.settings.get("send-report-email", False)
 
-        project = self._find_project(proj_name)
-
-        test_class = None
-        test = self._ws_proj_switch(project).multi_tests(name=test_name).first()
-        self.log.debug("Looked for collection: %s", test)
-        if test:
-            self.log.debug("Detected test type: new")
-            test_class = CloudCollectionTest
+        test_spec = parse_blazemeter_test_link(test_name)
+        self.log.debug("Parsed test link: %s", test_spec)
+        look_for_taurus_only = not launch_existing_test
+        if test_spec is not None:
+            # if we're to launch existing test - look for any type, otherwise - taurus only
+            account, workspace, project, test = self.user.test_by_ids(test_spec.account_id, test_spec.workspace_id,
+                                                                      test_spec.project_id, test_spec.test_id,
+                                                                      taurus_only=look_for_taurus_only)
+            if test is None:
+                raise TaurusConfigError("Test not found: %s", test_name)
+            self.log.info("Found test by link: %s", test_name)
         else:
-            test = self._ws_proj_switch(project).tests(name=test_name).first()
-            self.log.debug("Looked for test: %s", test)
-            if test:
-                self.log.debug("Detected test type: old")
+            account = self.resolve_account(account_name)
+            workspace = self.resolve_workspace(account, workspace_name)
+            project = self.resolve_project(workspace, project_name)
+            test = self.resolve_test(project, test_name, taurus_only=look_for_taurus_only)
+
+        if isinstance(test, MultiTest):
+            self.log.debug("Detected test type: multi")
+            test_class = CloudCollectionTest
+        elif isinstance(test, Test):
+            self.log.debug("Detected test type: standard")
+            test_class = CloudTaurusTest
+        else:
+            if launch_existing_test:
+                raise TaurusConfigError("Can't find test for launching: %r" % test_name)
+            if use_deprecated or self.settings.get("cloud-mode", None) == 'taurusCloud':
+                self.log.debug("Will create standard test")
                 test_class = CloudTaurusTest
             else:
-                if launch_existing_test:
-                    raise TaurusConfigError("Test not found: %r" % test_name)
-
-        if not project:
-            project = self._default_or_create_project(proj_name)
-            if proj_name:
-                test = None  # we have to create another test under this project
-
-        if not test:
-            if use_deprecated or cloud_mode == 'taurusCloud':
-                self.log.debug("Will create old-style test")
-                test_class = CloudTaurusTest
-            else:
-                self.log.debug("Will create new-style test")
+                self.log.debug("Will create a multi test")
                 test_class = CloudCollectionTest
 
         assert test_class is not None
-        router = test_class(self.user, test, project, test_name, default_location, launch_existing_test, self.log)
+        router = test_class(self.user, test, project, test_name, default_location, launch_existing_test,
+                            self.log)
         router._workspaces = self.workspaces
-        router.cloud_mode = cloud_mode
+        router.cloud_mode = self.settings.get("cloud-mode", None)
         router.dedicated_ips = self.settings.get("dedicated-ips", False)
         router.is_functional = self.is_functional
+        router.send_report_email = send_report_email
         return router
+
+    def _create_project_or_use_default(self, workspace, proj_name):
+        if proj_name:
+            return workspace.create_project(proj_name)
+        else:
+            info = self.user.fetch()
+            project = workspace.projects(ident=info['defaultProject']['id']).first()
+            if not project:
+                project = workspace.create_project("Taurus Tests Project")
+            return project
 
     def _default_or_create_project(self, proj_name):
         if proj_name:
             return self.workspaces.first().create_project(proj_name)
         else:
             info = self.user.fetch()
-            project = self.workspaces.projects(proj_id=info['defaultProject']['id']).first()
+            project = self.workspaces.projects(ident=info['defaultProject']['id']).first()
             if not project:
                 project = self.workspaces.first().create_project("Taurus Tests Project")
             return project
@@ -1000,6 +1031,7 @@ class BaseCloudTest(object):
         self.cloud_mode = None
         self.dedicated_ips = False
         self.is_functional = False
+        self.send_report_email = False
 
     @abstractmethod
     def prepare_locations(self, executors, engine_config):
@@ -1131,6 +1163,12 @@ class CloudTaurusTest(BaseCloudTest):
         if self.launch_existing_test:
             return
 
+        if self._test is not None:
+            test_type = self._test.get('configuration', {}).get('type')
+            if test_type != TAURUS_TEST_TYPE:
+                self.log.debug("Can't reuse test type %r as Taurus test, will create new one", test_type)
+                self._test = None
+
         if self._test is None:
             test_config = {
                 "type": TAURUS_TEST_TYPE,
@@ -1146,14 +1184,12 @@ class CloudTaurusTest(BaseCloudTest):
         if delete_old_files:
             self._test.delete_files()
 
-        test_type = self._test.get('configuration', {}).get('type')
-        if test_type != TAURUS_TEST_TYPE:
-            raise TaurusConfigError("Can't reuse test type %r as Taurus test" % test_type)
         taurus_config = yaml.dump(taurus_config, default_flow_style=False, explicit_start=True, canonical=False)
         self._test.upload_files(taurus_config, rfiles)
         self._test.update_props({'configuration': {'executionType': self.cloud_mode}})
         self._test.update_props({
-            'configuration': {'plugins': {'functionalExecution': {'enabled': self.is_functional}}}
+            'configuration': {'plugins': {'functionalExecution': {'enabled': self.is_functional},
+                                          'reportEmail': {"enabled": self.send_report_email}}}
         })
 
     def launch_test(self):
@@ -1251,7 +1287,6 @@ class CloudCollectionTest(BaseCloudTest):
 
         collection_draft = self._user.collection_draft(self._test_name, taurus_config, rfiles)
         if self._test is None:
-
             self.log.debug("Creating cloud collection test")
             self._test = self._project.create_multi_test(collection_draft)
         else:

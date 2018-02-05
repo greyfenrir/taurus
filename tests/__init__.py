@@ -45,7 +45,7 @@ def __dir__():
 root_dir = __dir__() + '/../'
 os.chdir(root_dir)
 
-RESOURCES_DIR = __dir__() + "/resources/"
+RESOURCES_DIR = os.path.join(__dir__(), 'resources') + os.path.sep
 BUILD_DIR = __dir__() + "/../build/tmp/"
 TEST_DIR = __dir__() + "/../build/test/"
 BASE_CONFIG = __dir__() + "/../bzt/resources/base-config.yml"
@@ -102,6 +102,11 @@ def random_datapoint(n):
     overall[KPISet.AVG_CONN_TIME] = overall[KPISet.AVG_RESP_TIME] / 3.0
     overall[KPISet.AVG_LATENCY] = 2.0 * overall[KPISet.AVG_RESP_TIME] / 3.0
     return point
+
+
+def close_reader_file(obj):
+    if obj and obj.file and obj.file.fds:
+        obj.file.fds.close()
 
 
 class BZTestCase(TestCase):

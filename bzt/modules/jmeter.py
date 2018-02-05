@@ -32,18 +32,19 @@ from itertools import dropwhile
 from cssselect import GenericTranslator
 
 from bzt import TaurusConfigError, ToolError, TaurusInternalException, TaurusNetworkError
-from bzt.engine import ScenarioExecutor, Scenario, FileLister, HavingInstallableTools, SelfDiagnosable, Provisioning
+from bzt.engine import ScenarioExecutor, Scenario, FileLister, HavingInstallableTools
+from bzt.engine import SelfDiagnosable, Provisioning, SETTINGS
 from bzt.jmx import JMX, JMeterScenarioBuilder, LoadSettingsProcessor
 from bzt.modules.aggregator import ConsolidatingAggregator, ResultsReader, DataPoint, KPISet
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.modules.functional import FunctionalAggregator, FunctionalResultsReader, FunctionalSample
 from bzt.modules.provisioning import Local
 from bzt.modules.soapui import SoapUIScriptConverter
-from bzt.requests_model import ResourceFilesCollector
-from bzt.six import communicate
-from bzt.six import iteritems, string_types, StringIO, etree, parse, unicode_decode, numeric_types
+from bzt.requests_model import ResourceFilesCollector, has_variable_pattern
+from bzt.six import communicate, PY2
+from bzt.six import iteritems, string_types, StringIO, etree, unicode_decode, numeric_types
 from bzt.utils import get_full_path, EXE_SUFFIX, MirrorsManager, ExceptionalDownloader, get_uniq_name
-from bzt.utils import shell_exec, BetterDict, guess_csv_dialect, ensure_is_dict, dehumanize_time
+from bzt.utils import shell_exec, BetterDict, guess_csv_dialect, ensure_is_dict, dehumanize_time, FileReader
 from bzt.utils import unzip, RequiredTool, JavaVM, shutdown_process, ProgressBarContext, TclLibrary
 
 
@@ -58,7 +59,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
     """
     MIRRORS_SOURCE = "https://jmeter.apache.org/download_jmeter.cgi"
     JMETER_DOWNLOAD_LINK = "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-{version}.zip"
-    PLUGINS_MANAGER_VERSION = "0.16"
+    PLUGINS_MANAGER_VERSION = "0.18"
     PLUGINS_MANAGER = 'https://search.maven.org/remotecontent?filepath=kg/apc/jmeter-plugins-manager/' \
                       '{ver}/jmeter-plugins-manager-{ver}.jar'.format(ver=PLUGINS_MANAGER_VERSION)
     CMDRUNNER = 'https://search.maven.org/remotecontent?filepath=kg/apc/cmdrunner/2.0/cmdrunner-2.0.jar'
@@ -79,7 +80,6 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         self.retcode = None
         self.distributed_servers = []
         self.management_port = None
-        self._env = {}
         self.resource_files_collector = None
         self.stdout_file = None
         self.stderr_file = None
@@ -284,10 +284,6 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
             else:
                 raise TaurusConfigError("You must specify either a JMX file or list of requests to run JMeter")
 
-        # check for necessary plugins and install them if needed
-        if self.settings.get("detect-plugins", True):
-            self.tool.install_for_jmx(self.original_jmx)
-
         if self.engine.aggregator.is_functional:
             flags = {"connectTime": True}
             version = LooseVersion(str(self.settings.get("version", self.JMETER_VER)))
@@ -304,6 +300,10 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         self.__set_jmeter_properties(scenario)
         self.__set_system_properties()
         self.__set_jvm_properties()
+
+        # check for necessary plugins and install them if needed
+        if self.settings.get("detect-plugins", True):
+            self.tool.install_for_jmx(self.modified_jmx)
 
         out = self.engine.create_artifact("jmeter", ".out")
         err = self.engine.create_artifact("jmeter", ".err")
@@ -333,10 +333,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         heap_size = self.settings.get("memory-xmx", None)
         if heap_size is not None:
             self.log.debug("Setting JVM heap size to %s", heap_size)
-            jvm_args = os.environ.get("JVM_ARGS", "")
-            if jvm_args:
-                jvm_args += ' '
-            self._env["JVM_ARGS"] = jvm_args + "-Xmx%s" % heap_size
+            self.env.add_java_param({"JVM_ARGS": "-Xmx%s" % heap_size})
 
     def __set_jmeter_properties(self, scenario):
         props = copy.deepcopy(self.settings.get("properties"))
@@ -393,11 +390,11 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
 
         self.start_time = time.time()
         try:
-            self.process = self.execute(cmdline, stdout=self.stdout_file, stderr=self.stderr_file, env=self._env)
+            self.process = self.execute(cmdline, stdout=self.stdout_file, stderr=self.stderr_file)
         except KeyboardInterrupt:
             raise
         except BaseException as exc:
-            ToolError("%s\nFailed to start JMeter: %s" % (cmdline, exc))
+            raise ToolError("%s\nFailed to start JMeter: %s" % (cmdline, exc))
 
     def check(self):
         """
@@ -566,7 +563,8 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
         kpi_lst = jmx.new_kpi_listener(self.kpi_jtl)
         self.__add_listener(kpi_lst, jmx)
 
-        jtl_log_level = self.execution.get('write-xml-jtl', 'error')
+        verbose = self.engine.config.get(SETTINGS).get("verbose", False)
+        jtl_log_level = self.execution.get('write-xml-jtl', "full" if verbose else 'error')
 
         flags = self.settings.get('xml-jtl-flags')
 
@@ -775,7 +773,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstall
                         break
                     parent = parent.getparent()
 
-                if resource_element.text and not parent_disabled:
+                if resource_element.text and not parent_disabled and not has_variable_pattern(resource_element.text):
                     resource_files.append(resource_element.text)
         return resource_files
 
@@ -1003,32 +1001,17 @@ class FuncJTLReader(FunctionalResultsReader):
         self.executor_label = "JMeter"
         self.log = parent_logger.getChild(self.__class__.__name__)
         self.parser = etree.XMLPullParser(events=('end',), recover=True)
-        self.offset = 0
-        self.filename = filename
         self.engine = engine
-        self.fds = None
+        self.file = FileReader(filename=filename, parent_logger=self.log)
         self.failed_processing = False
         self.read_records = 0
-
-    def __del__(self):
-        if self.fds:
-            self.fds.close()
 
     def read(self, last_pass=True):
         """
         Read the next part of the file
         """
-
         if self.failed_processing:
             return
-
-        if not self.fds:
-            if os.path.exists(self.filename) and os.path.getsize(self.filename):
-                self.log.debug("Opening %s", self.filename)
-                self.fds = open(self.filename, 'rb')
-            else:
-                self.log.debug("File not exists: %s", self.filename)
-                return
 
         self.__read_next_chunk(last_pass)
 
@@ -1044,21 +1027,20 @@ class FuncJTLReader(FunctionalResultsReader):
                 yield sample
 
     def __read_next_chunk(self, last_pass):
-        self.fds.seek(self.offset)
-        while True:
-            read = self.fds.read(1024 * 1024)
-            if read.strip():
-                try:
-                    self.parser.feed(read)
-                except etree.XMLSyntaxError as exc:
-                    self.failed_processing = True
-                    self.log.debug("Error reading trace.jtl: %s", traceback.format_exc())
-                    self.log.warning("Failed to parse errors XML: %s", exc)
-            else:
+        while not self.failed_processing:
+            read = self.file.get_bytes(size=1024 * 1024)
+            if not read or not read.strip():
                 break
+
+            try:
+                self.parser.feed(read)
+            except etree.XMLSyntaxError as exc:
+                self.failed_processing = True
+                self.log.debug("Error reading trace.jtl: %s", traceback.format_exc())
+                self.log.warning("Failed to parse errors XML: %s", exc)
+
             if not last_pass:
-                continue
-        self.offset = self.fds.tell()
+                break
 
     def _write_sample_data(self, filename, contents):
         artifact = self.engine.create_artifact(filename, ".bin")
@@ -1066,7 +1048,8 @@ class FuncJTLReader(FunctionalResultsReader):
             fds.write(contents.encode('utf-8'))
         return artifact
 
-    def _extract_sample_assertions(self, sample_elem):
+    @staticmethod
+    def _extract_sample_assertions(sample_elem):
         assertions = []
         for result in sample_elem.findall("assertionResult"):
             name = result.findtext("name")
@@ -1222,9 +1205,7 @@ class IncrementalCSVReader(object):
         self.log = parent_logger.getChild(self.__class__.__name__)
         self.indexes = {}
         self.partial_buffer = ""
-        self.offset = 0
-        self.filename = filename
-        self.fds = None
+        self.file = FileReader(filename=filename, parent_logger=self.log)
         self.read_speed = 1024 * 1024
 
     def read(self, last_pass=False):
@@ -1233,24 +1214,10 @@ class IncrementalCSVReader(object):
         yield csv row
         :type last_pass: bool
         """
-        if not self.fds and not self.__open_fds():
-            self.log.debug("No data to start reading yet")
-            return
+        lines = self.file.get_lines(size=self.read_speed, last_pass=last_pass)
 
-        self.log.debug("Reading JTL: %s", self.filename)
-        self.fds.seek(self.offset)  # without this we have stuck reads on Mac
-
-        if last_pass:
-            lines = self.fds.readlines()  # unlimited
-        else:
-            lines = self.fds.readlines(int(self.read_speed))
-        self.offset = self.fds.tell()
-        bytes_read = sum(len(line) for line in lines)
-        self.log.debug("Read lines: %s / %s bytes (at speed %s)", len(lines), bytes_read, self.read_speed)
-        if bytes_read >= self.read_speed:
-            self.read_speed = min(8 * 1024 * 1024, self.read_speed * 2)
-        elif bytes_read < self.read_speed / 2:
-            self.read_speed = max(self.read_speed / 2, 1024 * 1024)
+        lines_read = 0
+        bytes_read = 0
 
         for line in lines:
             if not line.endswith("\n"):
@@ -1260,6 +1227,9 @@ class IncrementalCSVReader(object):
             line = "%s%s" % (self.partial_buffer, line)
             self.partial_buffer = ""
 
+            lines_read += 1
+            bytes_read += len(line)
+
             if self.csv_reader is None:
                 dialect = guess_csv_dialect(line, force_doublequote=True)  # TODO: configurable doublequoting?
                 self.csv_reader = csv.DictReader(self.buffer, [], dialect=dialect)
@@ -1267,39 +1237,27 @@ class IncrementalCSVReader(object):
                 self.log.debug("Analyzed header line: %s", self.csv_reader.fieldnames)
                 continue
 
+            if PY2:  # todo: fix csv parsing of unicode strings on PY2
+                line = line.encode('utf-8')
+
             self.buffer.write(line)
 
-        self.buffer.seek(0)
-        for row in self.csv_reader:
-            yield row
-        self.buffer.seek(0)
-        self.buffer.truncate(0)
+        if lines_read:
+            self.log.debug("Read: %s lines / %s bytes (at speed %s)", lines_read, bytes_read, self.read_speed)
+            self._tune_speed(bytes_read)
 
-    def __open_fds(self):
-        """
-        Opens JTL file for reading
-        """
-        if not os.path.isfile(self.filename):
-            self.log.debug("File not appeared yet: %s", self.filename)
-            return False
+            self.buffer.seek(0)
+            for row in self.csv_reader:
+                yield row
 
-        fsize = os.path.getsize(self.filename)
-        if not fsize:
-            self.log.debug("File is empty: %s", self.filename)
-            return False
+            self.buffer.seek(0)
+            self.buffer.truncate(0)
 
-        if fsize <= self.offset:
-            self.log.debug("Waiting file to grow larget than %s, current: %s", self.offset, fsize)
-            return False
-
-        self.log.debug("Opening file: %s", self.filename)
-        self.fds = open(self.filename)
-        self.fds.seek(self.offset)
-        return True
-
-    def __del__(self):
-        if self.fds:
-            self.fds.close()
+    def _tune_speed(self, bytes_read):
+        if bytes_read >= self.read_speed:
+            self.read_speed = min(8 * 1024 * 1024, self.read_speed * 2)
+        elif bytes_read < self.read_speed / 2:
+            self.read_speed = max(self.read_speed / 2, 1024 * 1024)
 
 
 class JTLErrorsReader(object):
@@ -1317,36 +1275,19 @@ class JTLErrorsReader(object):
         super(JTLErrorsReader, self).__init__()
         self.log = parent_logger.getChild(self.__class__.__name__)
         self.parser = etree.XMLPullParser(events=('end',))
-        # context = etree.iterparse(self.fds, events=('end',))
-        self.offset = 0
-        self.filename = filename
-        self.fds = None
+        self.file = FileReader(filename=filename, parent_logger=self.log)
         self.buffer = BetterDict()
         self.failed_processing = False
-
-    def __del__(self):
-        if self.fds:
-            self.fds.close()
 
     def read_file(self, final_pass=False):
         """
         Read the next part of the file
         """
+        while not self.failed_processing:
+            read = self.file.get_bytes(size=1024 * 1024)
+            if not read or not read.strip():
+                break
 
-        if self.failed_processing:
-            return
-
-        if not self.fds:
-            if os.path.exists(self.filename) and os.path.getsize(self.filename):  # getsize check to not stuck on mac
-                self.log.debug("Opening %s", self.filename)
-                self.fds = open(self.filename, 'rb')
-            else:
-                self.log.debug("File not exists: %s", self.filename)
-                return
-
-        self.fds.seek(self.offset)
-        read = self.fds.read(1024 * 1024)
-        if read.strip():
             try:
                 self.parser.feed(read)  # "Huge input lookup" error without capping :)
             except etree.XMLSyntaxError as exc:
@@ -1354,14 +1295,15 @@ class JTLErrorsReader(object):
                 self.log.debug("Error reading errors.jtl: %s", traceback.format_exc())
                 self.log.warning("Failed to parse errors XML: %s", exc)
 
-        self.offset = self.fds.tell()
-        for _action, elem in self.parser.read_events():
-            del _action
-            if elem.getparent() is not None and elem.getparent().tag == 'testResults':
-                self._parse_element(elem)
-                elem.clear()  # cleanup processed from the memory
-                while elem.getprevious() is not None:
-                    del elem.getparent()[0]
+            for _, elem in self.parser.read_events():
+                if elem.getparent() is not None and elem.getparent().tag == 'testResults':
+                    self._parse_element(elem)
+                    elem.clear()  # cleanup processed from the memory
+                    while elem.getprevious() is not None:
+                        del elem.getparent()[0]
+
+            if not final_pass:
+                break
 
     def _parse_element(self, elem):
         if elem.get('s'):
@@ -1549,6 +1491,9 @@ class JMeter(RequiredTool):
         if err and "Wrong command: install-for-jmx" in err:  # old manager
             self.log.debug("pmgr can't discover jmx for plugins")
 
+        if out and "Restarting JMeter" in out:
+            time.sleep(5)  # allow for modifications to complete
+
     def __install_jmeter(self, dest):
         if self.download_link:
             jmeter_dist = self._download(use_link=True)
@@ -1601,32 +1546,6 @@ class JMeter(RequiredTool):
         cmd = [plugins_manager_cmd, 'install', plugin_str]
         self.log.debug("Trying: %s", cmd)
         try:
-            # prepare proxy settings
-            if self.proxy_settings and self.proxy_settings.get('address'):
-                env = BetterDict()
-                env.merge(dict(os.environ))
-                jvm_args = env.get('JVM_ARGS', '')
-
-                proxy_url = parse.urlsplit(self.proxy_settings.get("address"))
-                self.log.debug("Using proxy settings: %s", proxy_url)
-                host = proxy_url.hostname
-                port = proxy_url.port
-                if not port:
-                    port = 80
-
-                jvm_args += ' -Dhttp.proxyHost=%s -Dhttp.proxyPort=%s' % (host, port)  # TODO: remove it after pmgr 0.9
-                jvm_args += ' -Dhttps.proxyHost=%s -Dhttps.proxyPort=%s' % (host, port)
-
-                username = self.proxy_settings.get('username')
-                password = self.proxy_settings.get('password')
-
-                if username and password:
-                    # property names correspond to
-                    # https://github.com/apache/jmeter/blob/trunk/src/core/org/apache/jmeter/JMeter.java#L110
-                    jvm_args += ' -Dhttp.proxyUser="%s" -Dhttp.proxyPass="%s"' % (username, password)
-
-                env['JVM_ARGS'] = jvm_args
-
             proc = shell_exec(cmd)
             out, err = communicate(proc)
             self.log.debug("Install plugins: %s / %s", out, err)
@@ -1634,6 +1553,9 @@ class JMeter(RequiredTool):
             raise
         except BaseException as exc:
             raise ToolError("Failed to install plugins %s: %s" % (plugin_str, exc))
+
+        if out and "Restarting JMeter" in out:
+            time.sleep(5)  # allow for modifications to complete
 
     def _pmgr_path(self):
         dest = get_full_path(self.tool_path, step_up=2)

@@ -27,7 +27,7 @@ from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.requests_model import HTTPRequest
 from bzt.six import iteritems
 from bzt.utils import shell_exec, MirrorsManager, dehumanize_time, get_full_path, PythonGenerator
-from bzt.utils import unzip, RequiredTool, JavaVM, shutdown_process, TclLibrary
+from bzt.utils import unzip, RequiredTool, JavaVM, shutdown_process, TclLibrary, FileReader
 
 
 class GrinderExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstallableTools, SelfDiagnosable):
@@ -160,15 +160,11 @@ class GrinderExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstal
 
         # add logback configurations used by worker processes (logback-worker.xml)
         res_dir = os.path.join(get_full_path(__file__, step_up=2), 'resources')
-        classpath = res_dir
-        classpath += os.path.pathsep + os.path.join(res_dir, "grinder-logger-1.0.jar")
+        self.env.add_path({"CLASSPATH": res_dir}, finish=True)
+        self.env.add_path({"CLASSPATH": os.path.join(res_dir, "grinder-logger-1.0.jar")}, finish=True)
+        self.env.add_path({"CLASSPATH": self.settings.get("path", None)}, finish=True)
 
-        path = self.settings.get("path", None)
-        if path:
-            classpath += os.path.pathsep + path
-
-        self.cmd_line = ["java", "-classpath", classpath]
-        self.cmd_line += ["net.grinder.Grinder", self.properties_file]
+        self.cmd_line = ["java", "net.grinder.Grinder", self.properties_file]
 
     def startup(self):
         """
@@ -179,12 +175,9 @@ class GrinderExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstal
         err = self.engine.create_artifact("grinder-stderr", ".log")
         self.stdout_file = open(out, "w")
         self.stderr_file = open(err, "w")
+        self.env.set({"T_GRINDER_PREFIX": self.exec_id})
 
-        env = {"T_GRINDER_PREFIX": self.exec_id}
-        self.process = self.execute(self.cmd_line,
-                                    stdout=self.stdout_file,
-                                    stderr=self.stderr_file,
-                                    env=env)
+        self.process = self.execute(self.cmd_line, stdout=self.stdout_file, stderr=self.stderr_file)
 
     def check(self):
         """
@@ -239,7 +232,7 @@ class GrinderExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstal
 
     def install_required_tools(self):
         grinder_path = self.settings.get("path", "~/.bzt/grinder-taurus/lib/grinder.jar")
-        grinder_path = os.path.abspath(os.path.expanduser(grinder_path))
+        grinder_path = get_full_path(grinder_path)
         self.settings["path"] = grinder_path
         download_link = self.settings.get("download-link", "")
         required_tools = [TclLibrary(self.log),
@@ -297,11 +290,9 @@ class DataLogReader(ResultsReader):
         super(DataLogReader, self).__init__()
         self.report_by_url = False
         self.log = parent_logger.getChild(self.__class__.__name__)
-        self.filename = filename
-        self.fds = None
+        self.file = FileReader(filename=filename, parent_logger=self.log)
         self.idx = {}
         self.partial_buffer = ""
-        self.offset = 0
         self.start_time = 0
         self.end_time = 0
         self.concurrency = 0
@@ -314,65 +305,73 @@ class DataLogReader(ResultsReader):
 
         :param last_pass:
         """
-        while not self.fds and not self.__open_fds():
-            self.log.debug("No data to start reading yet")
-            yield None
-
         self.log.debug("Reading grinder results...")
-        self.fds.seek(self.offset)  # without this we have a stuck reads on Mac
-        if last_pass:
-            lines = self.fds.readlines()  # unlimited
-        else:
-            lines = self.fds.readlines(1024 * 1024)  # 1MB limit to read
-        self.offset = self.fds.tell()
 
+        self.lines = list(self.file.get_lines(size=1024 * 1024, last_pass=last_pass))
+
+        lnum = None
         start = time.time()
-        cnt = 0
-        for lnum, line in enumerate(lines):
-            cnt += 1
+
+        for lnum, line in enumerate(self.lines):
+            if not self.idx:
+                if not line.startswith('data.'):
+                    self.__split(line)  # to capture early test name records
+                    continue
+
+                line = line[line.find(' '):]
+
+                header_list = line.strip().split(self.DELIMITER)
+                for _ix, field in enumerate(header_list):
+                    self.idx[field.strip()] = _ix
+
             data_fields, worker_id = self.__split(line)
             if not data_fields:
                 self.log.debug("Skipping line: %s", line.strip())
                 continue
 
-            worker_id = worker_id.split('.')[1]
-            t_stamp = int(data_fields[self.idx["Start time (ms since Epoch)"]]) / 1000.0
-            r_time = int(data_fields[self.idx["Test time"]]) / 1000.0
-            latency = int(data_fields[self.idx["Time to first byte"]]) / 1000.0
-            r_code = data_fields[self.idx["HTTP response code"]].strip()
-            con_time = int(data_fields[self.idx["Time to resolve host"]]) / 1000.0
-            con_time += int(data_fields[self.idx["Time to establish connection"]]) / 1000.0
-            bytes_count = int(data_fields[self.idx["HTTP response length"]].strip())
-            test_id = data_fields[self.idx["Test"]].strip()
-            thread_id = worker_id + '/' + data_fields[self.idx["Thread"]].strip()
-            if thread_id not in self.known_threads:
-                self.known_threads.add(thread_id)
-                self.concurrency += 1
+            yield self.parse_line(data_fields, worker_id, lnum)
 
-            url, error_msg = self.__parse_prev_line(worker_id, lines, lnum, r_code, bytes_count)
-            if int(data_fields[self.idx["Errors"]]) > 0 or int(data_fields[self.idx['HTTP response errors']]) > 0:
-                if not error_msg:
-                    if r_code != '0':
-                        error_msg = "HTTP %s" % r_code
-                    else:
-                        error_msg = "Java exception calling TestRunner"
-            else:
-                error_msg = None  # suppress errors
-
-            if self.report_by_url:
-                label = url
-            elif test_id in self.test_names:
-                label = self.test_names[test_id]
-            else:
-                label = "Test #%s" % test_id
-
-            source_id = ''  # maybe use worker_id somehow?
-            yield int(t_stamp), label, self.concurrency, r_time, con_time, \
-                  latency, r_code, error_msg, source_id, bytes_count
-        if cnt > 0:
+        if lnum is not None:
             duration = time.time() - start
-            duration = duration if duration > 0.01 else 1
-            self.log.debug("Log reading speed: %s lines/s", len(lines) / duration)
+            if duration < 0.001:
+                duration = 0.001
+
+            self.log.debug("Log reading speed: %s lines/s", (lnum + 1) / duration)
+
+    def parse_line(self, data_fields, worker_id, lnum):
+        worker_id = worker_id.split('.')[1]
+        t_stamp = int(int(data_fields[self.idx["Start time (ms since Epoch)"]]) / 1000.0)
+        r_time = int(data_fields[self.idx["Test time"]]) / 1000.0
+        latency = int(data_fields[self.idx["Time to first byte"]]) / 1000.0
+        r_code = data_fields[self.idx["HTTP response code"]].strip()
+        con_time = int(data_fields[self.idx["Time to resolve host"]]) / 1000.0
+        con_time += int(data_fields[self.idx["Time to establish connection"]]) / 1000.0
+        bytes_count = int(data_fields[self.idx["HTTP response length"]].strip())
+        test_id = data_fields[self.idx["Test"]].strip()
+        thread_id = worker_id + '/' + data_fields[self.idx["Thread"]].strip()
+        if thread_id not in self.known_threads:
+            self.known_threads.add(thread_id)
+            self.concurrency += 1
+
+        url, error_msg = self.__parse_prev_lines(worker_id, lnum, r_code, bytes_count)
+        if int(data_fields[self.idx["Errors"]]) or int(data_fields[self.idx['HTTP response errors']]):
+            if not error_msg:
+                if r_code != '0':
+                    error_msg = "HTTP %s" % r_code
+                else:
+                    error_msg = "Java exception calling TestRunner"
+        else:
+            error_msg = None  # suppress errors
+
+        if self.report_by_url:
+            label = url
+        elif test_id in self.test_names:
+            label = self.test_names[test_id]
+        else:
+            label = "Test #%s" % test_id
+
+        source_id = ''  # maybe use worker_id somehow?
+        return t_stamp, label, self.concurrency, r_time, con_time, latency, r_code, error_msg, source_id, bytes_count
 
     def __split(self, line):
         if not line.endswith("\n"):
@@ -410,11 +409,11 @@ class DataLogReader(ResultsReader):
 
         return data_fields, worker_id
 
-    def __parse_prev_line(self, worker_id, lines, lnum, r_code, bytes_count):
+    def __parse_prev_lines(self, worker_id, lnum, r_code, bytes_count):
         url = ''
         error_msg = None
         for lineNo in reversed(range(max(lnum - 100, 0), lnum)):  # looking max 100 lines back. TODO: parameterize?
-            line = lines[lineNo].strip()
+            line = self.lines[lineNo].strip()
             matched = self.DETAILS_REGEX.match(line)
             if not matched:
                 continue
@@ -423,40 +422,6 @@ class DataLogReader(ResultsReader):
                 return matched.group(2), matched.group(4)
 
         return url, error_msg
-
-    def __open_fds(self):
-        """
-        opens grinder kpi-file
-        """
-        if not os.path.isfile(self.filename):
-            self.log.debug("File not appeared yet: %s", self.filename)
-            return False
-
-        if not os.path.getsize(self.filename):
-            self.log.debug("File is empty: %s", self.filename)
-            return False
-
-        self.fds = open(self.filename)
-        line = ''
-        while not line.startswith('data.'):
-            line = self.fds.readline()
-            self.__split(line)  # to caprute early test name records
-            if line == '':  # end of file
-                self.fds.close()
-                self.fds = None
-                return False
-
-        self.offset = self.fds.tell()
-        line = line[line.find(' '):]
-
-        header_list = line.strip().split(self.DELIMITER)
-        for _ix, field in enumerate(header_list):
-            self.idx[field.strip()] = _ix
-        return True
-
-    def __del__(self):
-        if self.fds:
-            self.fds.close()
 
 
 class Grinder(RequiredTool):

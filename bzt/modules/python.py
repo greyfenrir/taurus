@@ -18,20 +18,23 @@ import os
 import re
 import shlex
 import sys
+import time
 from abc import abstractmethod
 from collections import OrderedDict
 from subprocess import CalledProcessError
 
 import astunparse
-import time
+import yaml
 
 from bzt import ToolError, TaurusConfigError, TaurusInternalException
 from bzt.engine import HavingInstallableTools, Scenario, SETTINGS
 from bzt.modules import SubprocessedExecutor, ConsolidatingAggregator, FuncSamplesReader, FunctionalAggregator
+from bzt.modules.aggregator import ResultsReader
+from bzt.modules.functional import FunctionalResultsReader
 from bzt.modules.jmeter import JTLReader
 from bzt.requests_model import HTTPRequest
-from bzt.six import parse, string_types, iteritems
-from bzt.utils import BetterDict, ensure_is_dict, shell_exec
+from bzt.six import parse, string_types, iteritems, text_type
+from bzt.utils import BetterDict, ensure_is_dict, shell_exec, FileReader
 from bzt.utils import get_full_path, RequiredTool, PythonGenerator, dehumanize_time
 
 IGNORED_LINE = re.compile(r"[^,]+,Total:\d+ Passed:\d+ Failed:\d+")
@@ -44,8 +47,24 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
 
     def __init__(self):
         super(ApiritifNoseExecutor, self).__init__()
-        self._tailer = NoneTailer()
-        self._readers = []
+        self._tailer = FileReader(file_opener=lambda _: None, parent_logger=self.log)
+
+    def reporting_setup(self, prefix=None, suffix=None):
+        if not self.reported:
+            self.log.debug("Skipping reporting setup for executor %s", self)
+            return
+
+        if self.engine.is_functional_mode():
+            self.reader = ApiritifFuncReader(self.engine, self.log)
+        else:
+            self.reader = ApiritifLoadReader(self.log)
+
+        if not self.register_reader:
+            self.log.debug("Skipping reader registration for executor %s", self)
+            return
+
+        if isinstance(self.engine.aggregator, (ConsolidatingAggregator, FunctionalAggregator)):
+            self.engine.aggregator.add_underling(self.reader)
 
     def prepare(self):
         self.script = self.get_script_path()
@@ -54,8 +73,7 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
                 self.script = self.__tests_from_requests()
             else:
                 raise TaurusConfigError("Nothing to test, no requests were provided in scenario")
-
-        self.reporting_setup(suffix=".ldjson")
+        self.reporting_setup()  # no prefix/suffix because we don't fully control report file names
 
     def __tests_from_requests(self):
         filename = self.engine.create_artifact("test_requests", ".py")
@@ -73,14 +91,7 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
     def startup(self):
         executable = self.settings.get("interpreter", sys.executable)
 
-        py_path = os.getenv("PYTHONPATH")
-        taurus_dir = get_full_path(__file__, step_up=3)
-        if py_path:
-            py_path = os.pathsep.join((py_path, taurus_dir))
-        else:
-            py_path = taurus_dir
-
-        self.env["PYTHONPATH"] = py_path
+        self.env.add_path({"PYTHONPATH": get_full_path(__file__, step_up=3)})
 
         report_type = ".ldjson" if self.engine.is_functional_mode() else ".csv"
         report_tpl = self.engine.create_artifact("apiritif-", "") + "%s" + report_type
@@ -102,15 +113,18 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
         if load.steps:
             cmdline += ['--steps', str(load.steps)]
 
+        if self.__is_verbose():
+            cmdline += ['--verbose']
+
         cmdline += [self.script]
         self.start_time = time.time()
         self._start_subprocess(cmdline)
-        self._tailer = FileTailer(self.stdout_file)
+        self._tailer = FileReader(filename=self.stdout_file, parent_logger=self.log)
 
     def has_results(self):
-        if not self._readers:
+        if not self.reader:
             return False
-        return any(reader.read_records > 0 for reader in self._readers)
+        return self.reader.read_records > 0
 
     def check(self):
         for line in self._tailer.get_lines():
@@ -119,15 +133,7 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
                 pos = line.index(marker)
                 fname = line[pos + len(marker):].strip()
                 self.log.debug("Adding result reader for %s", fname)
-                if not self.engine.is_functional_mode():
-                    reader = JTLReader(fname, self.log)
-                    if isinstance(self.engine.aggregator, ConsolidatingAggregator):
-                        self.engine.aggregator.add_underling(reader)
-                else:
-                    reader = FuncSamplesReader(self.report_file, self.engine, self.log)
-                    if isinstance(self.engine.aggregator, FunctionalAggregator):
-                        self.engine.aggregator.add_underling(reader)
-                self._readers.append(reader)
+                self.reader.register_file(fname)
 
         return super(ApiritifNoseExecutor, self).check()
 
@@ -150,12 +156,51 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
         return executor_verbose
 
 
-class TaurusNosePlugin(RequiredTool):
-    def __init__(self, tool_path, download_link):
-        super(TaurusNosePlugin, self).__init__("TaurusNosePlugin", tool_path, download_link)
+class NoseTester(ApiritifNoseExecutor):
+    pass
 
-    def install(self):
-        raise ToolError("Automatic installation of Taurus nose plugin isn't implemented")
+
+class ApiritifLoadReader(ResultsReader):
+    def __init__(self, parent_log):
+        super(ApiritifLoadReader, self).__init__()
+        self.log = parent_log.getChild(self.__class__.__name__)
+        self.filenames = []
+        self.readers = []
+        self.read_records = False
+
+    def register_file(self, report_filename):
+        self.filenames.append(report_filename)
+        reader = JTLReader(report_filename, self.log)
+        self.readers.append(reader)
+
+    def _read(self, final_pass=False):
+        for reader in self.readers:
+            if not self.read_records:
+                self.read_records = True
+            for sample in reader._read(final_pass):
+                yield sample
+
+
+class ApiritifFuncReader(FunctionalResultsReader):
+    def __init__(self, engine, parent_log):
+        super(ApiritifFuncReader, self).__init__()
+        self.engine = engine
+        self.log = parent_log.getChild(self.__class__.__name__)
+        self.filenames = []
+        self.readers = []
+        self.read_records = False
+
+    def register_file(self, report_filename):
+        self.filenames.append(report_filename)
+        reader = FuncSamplesReader(report_filename, self.engine, self.log)
+        self.readers.append(reader)
+
+    def read(self, last_pass=False):
+        for reader in self.readers:
+            for sample in reader.read(last_pass):
+                if not self.read_records:
+                    self.read_records = True
+                yield sample
 
 
 class SeleniumScriptBuilder(PythonGenerator):
@@ -242,7 +287,6 @@ import apiritif
                 test_method.append(self.gen_new_line(indent=0))
 
         test_class.append(test_method)
-        return {}
 
     def _add_url_request(self, default_address, req, test_method):
         parsed_url = parse.urlparse(req.url)
@@ -408,35 +452,6 @@ import apiritif
             selector = selector[1:-1]
 
         return aby, atype, param, selector
-
-
-class NoneTailer(object):
-    def get_lines(self):
-        return ()
-
-
-class FileTailer(NoneTailer):
-    def __init__(self, filename):
-        super(FileTailer, self).__init__()
-        self.file_name = filename
-        self._fds = None
-        self.offset = 0
-
-    def get_lines(self):
-        if not self._fds:
-            if os.path.isfile(self.file_name):
-                self._fds = open(self.file_name)
-            else:
-                return
-
-        self._fds.seek(self.offset)
-        for line in self._fds.readlines():
-            yield line.rstrip()
-        self.offset = self._fds.tell()
-
-    def __del__(self):
-        if self._fds:
-            self._fds.close()
 
 
 class ApiritifScriptGenerator(PythonGenerator):
@@ -861,7 +876,6 @@ log.setLevel(logging.DEBUG)
 
     def build_source_code(self):
         self.tree = self.build_tree()
-        return {}
 
     def save(self, filename):
         with open(filename, 'wt') as fds:
@@ -1055,7 +1069,7 @@ class PyTestExecutor(SubprocessedExecutor, HavingInstallableTools):
     def __init__(self):
         super(PyTestExecutor, self).__init__()
         self.runner_path = os.path.join(get_full_path(__file__, step_up=2), "resources", "pytest_runner.py")
-        self._tailer = NoneTailer()
+        self._tailer = FileReader('', file_opener=lambda _: None, parent_logger=self.log)
         self._additional_args = []
 
     def prepare(self):
@@ -1091,7 +1105,7 @@ class PyTestExecutor(SubprocessedExecutor, HavingInstallableTools):
         """
         executable = self.settings.get("interpreter", sys.executable)
 
-        self.env.update({"PYTHONPATH": os.getenv("PYTHONPATH", "") + os.pathsep + get_full_path(__file__, step_up=3)})
+        self.env.add_path({"PYTHONPATH": get_full_path(__file__, step_up=3)})
 
         cmdline = [executable, self.runner_path, '--report-file', self.report_file]
         cmdline += self._additional_args
@@ -1107,7 +1121,7 @@ class PyTestExecutor(SubprocessedExecutor, HavingInstallableTools):
         self._start_subprocess(cmdline)
 
         if self.__is_verbose():
-            self._tailer = FileTailer(self.stdout_file)
+            self._tailer = FileReader(filename=self.stdout_file, parent_logger=self.log)
 
     def check(self):
         self.__log_lines()
@@ -1139,6 +1153,14 @@ class RobotExecutor(SubprocessedExecutor, HavingInstallableTools):
     def __init__(self):
         super(RobotExecutor, self).__init__()
         self.runner_path = os.path.join(get_full_path(__file__, step_up=2), "resources", "robot_runner.py")
+        self.variables_file = None
+
+    def resource_files(self):
+        files = super(RobotExecutor, self).resource_files()
+        scenario = self.get_scenario()
+        if "variables" in scenario and isinstance(scenario["variables"], (string_types, text_type)):
+            files.append(scenario["variables"])
+        return files
 
     def prepare(self):
         self.install_required_tools()
@@ -1148,6 +1170,21 @@ class RobotExecutor(SubprocessedExecutor, HavingInstallableTools):
 
         self.reporting_setup(suffix=".ldjson")
 
+        scenario = self.get_scenario()
+        variables = scenario.get("variables")
+        if variables:
+            if isinstance(variables, (string_types, text_type)):
+                self.variables_file = get_full_path(variables)
+            elif isinstance(variables, dict):
+                self.variables_file = self.engine.create_artifact("robot-vars", ".yaml")
+                with open(self.variables_file, 'wb') as fds:
+                    yml = yaml.dump(variables,
+                                    default_flow_style=False, explicit_start=True, canonical=False, allow_unicode=True,
+                                    encoding='utf-8', width=float("inf"))
+                    fds.write(yml)
+            else:
+                raise TaurusConfigError("`variables` is neither file nor dict")
+
     def install_required_tools(self):
         self._check_tools([Robot(self.settings.get("interpreter", sys.executable), self.log),
                            TaurusRobotRunner(self.runner_path, "")])
@@ -1155,7 +1192,7 @@ class RobotExecutor(SubprocessedExecutor, HavingInstallableTools):
     def startup(self):
         executable = self.settings.get("interpreter", sys.executable)
 
-        self.env.update({"PYTHONPATH": os.getenv("PYTHONPATH", "") + os.pathsep + get_full_path(__file__, step_up=3)})
+        self.env.add_path({"PYTHONPATH":  get_full_path(__file__, step_up=3)})
 
         cmdline = [executable, self.runner_path, '--report-file', self.report_file]
 
@@ -1165,6 +1202,9 @@ class RobotExecutor(SubprocessedExecutor, HavingInstallableTools):
 
         if load.hold:
             cmdline += ['--duration', str(load.hold)]
+
+        if self.variables_file is not None:
+            cmdline += ['--variablefile', self.variables_file]
 
         cmdline += [self.script]
         self._start_subprocess(cmdline)

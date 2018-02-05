@@ -16,7 +16,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import json
-import math
 import sys
 import time
 from collections import OrderedDict, Counter
@@ -32,7 +31,7 @@ from bzt.modules.aggregator import ConsolidatingAggregator, ResultsProvider, Dat
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.modules.jmeter import JTLReader
 from bzt.requests_model import HTTPRequest
-from bzt.utils import get_full_path, ensure_is_dict, PythonGenerator
+from bzt.utils import get_full_path, ensure_is_dict, PythonGenerator, FileReader
 from bzt.utils import shutdown_process, RequiredTool, BetterDict, dehumanize_time
 
 
@@ -88,10 +87,9 @@ class LocustIOExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInsta
 
         wrapper = os.path.join(get_full_path(__file__, step_up=2), "resources", "locustio-taurus-wrapper.py")
 
-        env = BetterDict()
-        env.merge({"PYTHONPATH": self.engine.artifacts_dir + os.pathsep + os.getcwd()})
-        if os.getenv("PYTHONPATH"):
-            env['PYTHONPATH'] = os.getenv("PYTHONPATH") + os.pathsep + env['PYTHONPATH']
+        self.env.add_path({"PYTHONPATH": self.engine.artifacts_dir})
+        self.env.add_path({"PYTHONPATH": os.getcwd()})
+        self.env.set({"LOCUST_DURATION": dehumanize_time(load.duration)})
 
         self.log_file = self.engine.create_artifact("locust", ".log")
         args = [sys.executable, wrapper, '-f', self.script]
@@ -101,19 +99,18 @@ class LocustIOExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInsta
         if load.iterations:
             args.append("--num-request=%d" % load.iterations)
 
-        env['LOCUST_DURATION'] = dehumanize_time(load.duration)
         if self.is_master:
             args.extend(["--master", '--expect-slaves=%s' % self.expected_slaves])
-            env["SLAVES_LDJSON"] = self.slaves_ldjson
+            self.env.set({"SLAVES_LDJSON": self.slaves_ldjson})
         else:
-            env["JTL"] = self.kpi_jtl
+            self.env.set({"JTL": self.kpi_jtl})
 
         host = self.get_scenario().get("default-address", None)
         if host is not None:
             args.append('--host=%s' % host)
 
         self.__out = open(self.engine.create_artifact("locust", ".out"), 'w')
-        self.process = self.execute(args, stderr=STDOUT, stdout=self.__out, env=env)
+        self.process = self.execute(args, stderr=STDOUT, stdout=self.__out)
 
     def get_widget(self):
         """
@@ -221,22 +218,17 @@ class SlavesReader(ResultsProvider):
         """
         super(SlavesReader, self).__init__()
         self.log = parent_logger.getChild(self.__class__.__name__)
-        self.filename = filename
         self.join_buffer = {}
         self.num_slaves = num_slaves
-        self.fds = None
+        self.file = FileReader(filename=filename, parent_logger=self.log)
         self.read_buffer = ""
 
     def _calculate_datapoints(self, final_pass=False):
-        if not self.fds:
-            self.__open_file()
-
-        if self.fds:
-            self.read_buffer += self.fds.read(1024 * 1024)
-            while "\n" in self.read_buffer:
-                _line = self.read_buffer[:self.read_buffer.index("\n") + 1]
-                self.read_buffer = self.read_buffer[len(_line):]
-                self.fill_join_buffer(json.loads(_line))
+        self.read_buffer += self.file.get_bytes(size=1024 * 1024, last_pass=final_pass)
+        while "\n" in self.read_buffer:
+            _line = self.read_buffer[:self.read_buffer.index("\n") + 1]
+            self.read_buffer = self.read_buffer[len(_line):]
+            self.fill_join_buffer(json.loads(_line))
 
         max_full_ts = self.get_max_full_ts()
 
@@ -261,17 +253,6 @@ class SlavesReader(ResultsProvider):
             if len(key) >= self.num_slaves:
                 max_full_ts = int(key)
         return max_full_ts
-
-    def __del__(self):
-        if self.fds:
-            self.fds.close()
-
-    def __open_file(self):
-        if os.path.exists(self.filename):
-            self.log.debug("Opening %s", self.filename)
-            self.fds = open(self.filename, 'rt')
-        else:
-            self.log.debug("File not exists: %s", self.filename)
 
     def fill_join_buffer(self, data):
         self.log.debug("Got slave data: %s", data)

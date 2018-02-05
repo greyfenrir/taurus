@@ -6,7 +6,7 @@ import time
 from bzt.modules.gatling import GatlingExecutor, DataLogReader
 from bzt.six import u
 from bzt.utils import EXE_SUFFIX, get_full_path, BetterDict
-from tests import BZTestCase, __dir__, RESOURCES_DIR, BUILD_DIR
+from tests import BZTestCase, __dir__, RESOURCES_DIR, BUILD_DIR, close_reader_file
 from tests.mocks import EngineEmul
 from bzt.modules.provisioning import Local
 from bzt import ToolError, TaurusConfigError
@@ -16,6 +16,7 @@ def get_gatling():
     path = os.path.abspath(RESOURCES_DIR + "gatling/gatling" + EXE_SUFFIX)
     obj = GatlingExecutor()
     obj.engine = EngineEmul()
+    obj.env = obj.engine.env
     obj.settings.merge({"path": path})
     return obj
 
@@ -30,8 +31,7 @@ class TestGatlingExecutor(BZTestCase):
             self.obj.stdout_file.close()
         if self.obj.stderr_file:
             self.obj.stderr_file.close()
-        if self.obj.reader and self.obj.reader.fds:
-            self.obj.reader.fds.close()
+        close_reader_file(self.obj.reader)
         super(TestGatlingExecutor, self).tearDown()
 
     def test_external_jar_wrong_launcher(self):
@@ -65,13 +65,13 @@ class TestGatlingExecutor(BZTestCase):
         self.obj.startup()
         self.obj.shutdown()
 
-        jar_files = self.obj.jar_list
         modified_launcher = self.obj.launcher
         with open(modified_launcher) as modified:
             modified_lines = modified.readlines()
 
-        self.assertIn('fake_grinder.jar', jar_files)
-        self.assertIn('another_dummy.jar', jar_files)
+        for jar in ('fake_grinder.jar', 'another_dummy.jar'):
+            for var in ("JAVA_CLASSPATH", "COMPILATION_CLASSPATH"):
+                self.assertIn(jar, self.obj.env.get(var))
 
         for line in modified_lines:
             self.assertFalse(line.startswith('set COMPILATION_CLASSPATH=""'))
@@ -366,7 +366,9 @@ class TestGatlingExecutor(BZTestCase):
                 time.sleep(self.obj.engine.check_interval)
         finally:
             self.obj.shutdown()
-        self.assertIn('simulations.jar', self.obj.jar_list)
+
+        for var in ("JAVA_CLASSPATH", "COMPILATION_CLASSPATH"):
+            self.assertIn("simulations.jar", self.obj.env.get(var))
 
     def test_files_find_file(self):
         curdir = get_full_path(os.curdir)
@@ -390,8 +392,10 @@ class TestGatlingExecutor(BZTestCase):
                     time.sleep(self.obj.engine.check_interval)
             finally:
                 self.obj.shutdown()
-            self.assertIn('simulations.jar', self.obj.jar_list)
-            self.assertIn('deps.jar', self.obj.jar_list)
+
+            for jar in ("simulations.jar", "deps.jar"):
+                for var in ("JAVA_CLASSPATH", "COMPILATION_CLASSPATH"):
+                    self.assertIn(jar, self.obj.env.get(var))
         finally:
             os.chdir(curdir)
 
@@ -421,8 +425,10 @@ class TestGatlingExecutor(BZTestCase):
         self.assertEqual(res_files, [csv_path])
 
     def test_diagnostics(self):
-        self.obj.execution.merge({"scenario": {"script": RESOURCES_DIR + "gatling/simulations.jar",
-                                               "simulation": "tests.gatling.BasicSimulation"}})
+        self.obj.execution.merge({
+            "scenario": {
+                "script": RESOURCES_DIR + "gatling/simulations.jar",
+                "simulation": "tests.gatling.BasicSimulation"}})
         self.obj.prepare()
         try:
             self.obj.startup()
@@ -437,15 +443,13 @@ class TestGatlingExecutor(BZTestCase):
         self.obj.execution.merge({
             "scenario": {
                 "keepalive": True,
-                "requests": ["http://blazedemo.com/"],
-            }
-        })
-        saved_env = BetterDict()
-        self.obj.execute = lambda self, *args, **kwargs: saved_env.merge(kwargs['env'])
+                "requests": ["http://blazedemo.com/"]}})
+
+        self.obj.execute = lambda *args, **kwargs: None
         self.obj.prepare()
         self.obj.startup()
-        self.assertIn("gatling.http.ahc.allowPoolingConnections=true", saved_env["JAVA_OPTS"])
-        self.assertIn("gatling.http.ahc.keepAlive=true", saved_env["JAVA_OPTS"])
+        self.assertIn("gatling.http.ahc.allowPoolingConnections=true", self.obj.env.get("JAVA_OPTS"))
+        self.assertIn("gatling.http.ahc.keepAlive=true", self.obj.env.get("JAVA_OPTS"))
 
 
 class TestDataLogReader(BZTestCase):

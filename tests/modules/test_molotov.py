@@ -7,8 +7,8 @@ from os.path import exists, join
 from bzt import ToolError
 from bzt.modules.aggregator import DataPoint, KPISet
 from bzt.modules.molotov import MolotovExecutor, MolotovReportReader
-from bzt.utils import EXE_SUFFIX
-from tests import BZTestCase, RESOURCES_DIR
+from bzt.utils import EXE_SUFFIX, is_windows
+from tests import BZTestCase, RESOURCES_DIR, close_reader_file
 from tests.mocks import EngineEmul
 
 TOOL_NAME = 'molotov-mock' + EXE_SUFFIX
@@ -21,14 +21,15 @@ class TestMolotov(BZTestCase):
         super(TestMolotov, self).setUp()
         self.obj = MolotovExecutor()
         self.obj.engine = EngineEmul()
+        self.obj.env = self.obj.engine.env
 
     def tearDown(self):
         if self.obj.stdout_file:
             self.obj.stdout_file.close()
         if self.obj.stderr_file:
             self.obj.stderr_file.close()
-        if self.obj.reader and self.obj.reader.ldjson_reader and self.obj.reader.ldjson_reader.fds:
-            self.obj.reader.ldjson_reader.fds.close()
+        if self.obj.reader:
+            close_reader_file(self.obj.reader.ldjson_reader)
         super(TestMolotov, self).tearDown()
 
     def test_mocked(self):
@@ -81,6 +82,7 @@ class TestMolotov(BZTestCase):
         self.assertEqual(resources, [LOADTEST_PY])
 
     @unittest.skipUnless(sys.version_info >= (3, 5), "enabled only on 3.5+")
+    @unittest.skipIf(is_windows(), "disabled on windows")
     def test_full(self):
         self.obj.execution.merge({
             "concurrency": 3,
