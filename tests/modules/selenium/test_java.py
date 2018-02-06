@@ -169,17 +169,16 @@ class TestJUnitTester(BZTestCase):
             java.JUNIT_MIRRORS_SOURCE = junit_mirrors
 
     def test_simple(self):
-        return
         self.obj.engine.aggregator = ConsolidatingAggregator()
         self.obj.execution.merge({"scenario": {"script": RESOURCES_DIR + "BlazeDemo.java"}})
         self.obj.prepare()
         self.obj.engine.aggregator.prepare()
         self.obj.startup()
         while not self.obj.check():
-            self.obj.engine.aggregator.check()
+            #self.obj.engine.aggregator.check()
             time.sleep(1)
         self.obj.shutdown()
-        self.obj.engine.aggregator.shutdown()
+        #self.obj.engine.aggregator.shutdown()
         self.obj.post_process()
         self.obj.engine.aggregator.post_process()
         self.assertTrue(self.obj.has_results())
