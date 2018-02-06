@@ -26,6 +26,7 @@ public class BlazeDemo {
 
     @After
     public void tearDown() {
-        wd.quit();
+        if (wd != null)
+            wd.quit();
     }
 }
