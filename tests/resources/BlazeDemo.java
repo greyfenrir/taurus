@@ -19,6 +19,8 @@ public class BlazeDemo {
 
     @Test
     public void BlazeDemo() {
+        System.out.println(" *** demo ***");
+        System.out.println(System.getProperty("java.class.path"));
         wd.get("http://localhost:8000/BlazeDemo.html");
         wd.findElement(By.cssSelector("input.btn.btn-primary")).click();
         // wd.findElement(By.xpath("//table[@class='table']/tbody/tr[4]/td[1]/input")).click();
