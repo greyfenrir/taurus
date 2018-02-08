@@ -91,11 +91,6 @@ class Proxy2JMX(Service, Singletone):
             self.log.warning("Your system doesn't support settings of proxy by Taurus way")
 
         for executor in self.engine.provisioning.executors:
-            if isinstance(executor, AbstractSeleniumExecutor):
-                if executor.label:
-                    labels.append(executor.label)
-                executor.env.set(additional_env)
-
             if isinstance(executor, SubprocessedExecutor):
                 if executor.label:
                     labels.append(executor.label)
