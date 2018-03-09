@@ -3,6 +3,7 @@ import shutil
 import time
 from os.path import join, exists, dirname
 
+import bzt
 from bzt.modules import javascript
 from bzt.modules.aggregator import ConsolidatingAggregator
 from bzt.modules.javascript import WebdriverIOExecutor, NewmanExecutor
@@ -18,6 +19,37 @@ class TestSeleniumMochaRunner(SeleniumTestCase):
             "script": RESOURCES_DIR + "selenium/js-mocha/bd_scenarios.js"
         }})
         self.obj.prepare()
+
+    def test_mocha_not_found(self):
+        self.obj.execution.merge({"scenario": {
+            "script": RESOURCES_DIR + "selenium/js-mocha/bd_scenarios.js"
+        }})
+        self.func_results = "not found"
+        sync_run_back = bzt.modules.javascript.sync_run
+        bzt.modules.javascript.sync_run = self.func_mock
+        try:
+            self.obj.prepare()
+        finally:
+            bzt.modules.javascript.sync_run = sync_run_back
+
+        self.assertEqual(4, len(self.func_args))
+        runner = self.obj.runner
+        npm_check = [runner.node_tool.executable, "-e", "require('mocha'); console.log('mocha is installed');"]
+        self.assertEqual(npm_check, self.func_args[0]["args"][0])
+
+    def test_mocha_installed(self):
+        self.obj.execution.merge({"scenario": {
+            "script": RESOURCES_DIR + "selenium/js-mocha/bd_scenarios.js"
+        }})
+        self.func_results = "mocha is installed"
+        sync_run_back = bzt.utils.sync_run
+        bzt.modules.javascript.sync_run = self.func_mock
+        try:
+            self.obj.prepare()
+        finally:
+            bzt.modules.javascript.get_output = sync_run_back
+
+        self.assertEqual(3, len(self.func_args))
 
     def test_mocha_full(self):
         self.obj.engine.config.merge({
