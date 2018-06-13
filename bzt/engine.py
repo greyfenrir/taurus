@@ -251,6 +251,9 @@ class Engine(object):
             prev = time.time()
             if self.interrupted:
                 raise ManualShutdown()
+            if self.engine_loop_utilization > 3:
+                self.log.warning('Taurus hangs, LU: %s' % self.engine_loop_utilization)
+                raise ManualShutdown()
         self.config.dump()
 
     def _shutdown(self):
@@ -280,6 +283,7 @@ class Engine(object):
         Do post-run analysis and processing for the results.
         """
         self.log.info("Post-processing...")
+        pp_start = time.time()
         # :type exception: BaseException
         exc_info = None
         modules = [self.provisioning, self.aggregator] + self.reporters + self.services  # order matters
@@ -298,6 +302,7 @@ class Engine(object):
                     if not exc_info:
                         exc_info = sys.exc_info()
         self.config.dump()
+        self.log.info("Post-processing length: %ss" % (time.time() - pp_start))
 
         if exc_info:
             reraise(exc_info)
