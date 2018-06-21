@@ -52,6 +52,7 @@ TAURUS_ARTIFACTS_DIR = "TAURUS_ARTIFACTS_DIR"
 SETTINGS = "settings"
 
 
+
 class Engine(object):
     """
     Core entity of the technology, used to coordinate whole process
