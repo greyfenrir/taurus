@@ -45,7 +45,7 @@ from bzt.six import numeric_types
 from bzt.six import string_types, text_type, PY2, UserDict, parse, reraise
 from bzt.utils import PIPE, shell_exec, get_full_path, ExceptionalDownloader, get_uniq_name, HTTPClient
 from bzt.utils import load_class, to_json, BetterDict, ensure_is_dict, dehumanize_time, is_windows, is_linux
-from bzt.utils import str_representer, Environment
+from bzt.utils import str_representer, Environment, RequiredTool
 
 TAURUS_ARTIFACTS_DIR = "TAURUS_ARTIFACTS_DIR"
 
@@ -1007,6 +1007,14 @@ class ScenarioExecutor(EngineModule):
             return True
         else:
             return False
+
+    def get_tool(self, tool, **kwargs):
+        env = Environment(self.log, self.env.get())
+
+        instance = tool(env=env, log=self.log, http_client=self.engine.get_http_client(), **kwargs)
+        assert isinstance(instance, RequiredTool)
+
+        return instance
 
     def get_script_path(self, required=False, scenario=None):
         """
