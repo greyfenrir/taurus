@@ -60,6 +60,7 @@ from bzt.six import stream_decode, file_type, etree, parse, deunicode, url2pathn
 from bzt.six import string_types, iteritems, binary_type, text_type, b, integer_types
 
 CALL_PROBLEMS = (CalledProcessError, OSError)
+LOG = logging.getLogger("")
 
 
 def sync_run(args, env=None):
@@ -390,10 +391,13 @@ def shell_exec(args, cwd=None, stdout=PIPE, stderr=PIPE, stdin=PIPE, shell=False
 
 
 class Environment(object):
-    def __init__(self, parent_log, data=None):
+    def __init__(self, log=None, data=None):
         self.data = {}
-        self.log = parent_log.getChild(self.__class__.__name__)
-        if data is not None:
+
+        log = log or LOG
+        self.log = log.getChild(self.__class__.__name__)
+
+        if data:
             self.set(data)
 
     def set(self, env):
@@ -1112,16 +1116,31 @@ class RequiredTool(object):
     """
     Abstract required tool
     """
-
-    def __init__(self, tool_name, tool_path, download_link="", http_client=None):
+    def __init__(self, log=None, tool_path="", download_link="", http_client=None,
+                 env=None, version=None, installable=True):
         self.http_client = http_client
-        self.tool_name = tool_name
         self.tool_path = os.path.expanduser(tool_path)
         self.download_link = download_link
         self.already_installed = False
         self.mirror_manager = None
-        self.log = logging.getLogger('')
-        self.version = None
+        self.version = version
+        self.installable = installable
+
+        self.tool_name = self.__class__.__name__
+
+        # for browsermobproxy compatability, remove it later
+        if not isinstance(log, logging.Logger):
+            log = None
+
+        if log is None:
+            log = log or LOG
+
+        self.log = log.getChild(self.tool_name)
+
+        if env is None:
+            env = Environment(self.log, dict(os.environ))
+
+        self.env = env
 
     def _get_version(self, output):
         return
@@ -1134,6 +1153,9 @@ class RequiredTool(object):
         return False
 
     def install(self):
+        if not self.installable:
+            raise ToolError("Automatic installation of %s isn't implemented" % self.tool_name)
+
         with ProgressBarContext() as pbar:
             if not os.path.exists(os.path.dirname(self.tool_path)):
                 os.makedirs(os.path.dirname(self.tool_path))
@@ -1166,9 +1188,8 @@ class RequiredTool(object):
 
 
 class JavaVM(RequiredTool):
-    def __init__(self, parent_logger, tool_path='java', download_link='', http_client=None):
-        super(JavaVM, self).__init__("JavaVM", tool_path, download_link, http_client=http_client)
-        self.log = parent_logger.getChild(self.__class__.__name__)
+    def __init__(self, **kwargs):
+        super(JavaVM, self).__init__(installable=False, tool_path="java", **kwargs)
 
     def _get_version(self, output):
         versions = re.findall("version\ \"([_\d\.]*)", output)
@@ -1190,9 +1211,6 @@ class JavaVM(RequiredTool):
         except (CalledProcessError, OSError) as exc:
             self.log.debug("Failed to check %s: %s", self.tool_name, exc)
             return False
-
-    def install(self):
-        raise ToolError("The %s is not operable or not available. Consider installing it" % self.tool_name)
 
 
 class ProgressBarContext(ProgressBar):
@@ -1245,10 +1263,6 @@ class TclLibrary(RequiredTool):
     INIT_TCL = "init.tcl"
     FOLDER = "tcl"
 
-    def __init__(self, parent_logger):
-        super(TclLibrary, self).__init__("Python Tcl library environment variable", "")
-        self.log = parent_logger.getChild(self.__class__.__name__)
-
     def check_if_installed(self):
         """
         Check if tcl is available
@@ -1294,10 +1308,8 @@ class TclLibrary(RequiredTool):
 
 
 class Node(RequiredTool):
-    def __init__(self, parent_logger):
-        super(Node, self).__init__("Node.js", "")
-        self.log = parent_logger.getChild(self.__class__.__name__)
-        self.executable = None
+    def __init__(self, **kwargs):
+        super(Node, self).__init__(installable=False, **kwargs)
 
     def check_if_installed(self):
         node_candidates = ["node", "nodejs"]
@@ -1306,15 +1318,12 @@ class Node(RequiredTool):
                 self.log.debug("Trying %r", candidate)
                 output = sync_run([candidate, '--version'])
                 self.log.debug("%s output: %s", candidate, output)
-                self.executable = candidate
+                self.tool_path = candidate
                 return True
             except (CalledProcessError, OSError):
                 self.log.debug("%r is not installed", candidate)
                 continue
         return False
-
-    def install(self):
-        raise ToolError("Automatic installation of nodejs is not implemented. Install it manually")
 
 
 class MirrorsManager(object):
