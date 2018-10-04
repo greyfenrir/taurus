@@ -14,14 +14,14 @@ from bzt.jmx.tools import ProtocolHandler
 from bzt.modules.aggregator import ConsolidatingAggregator
 from bzt.modules.blazemeter import CloudProvisioning
 from bzt.modules.functional import FunctionalAggregator
-from bzt.modules.jmeter import JMeterExecutor, JTLReader, FuncJTLReader
+from bzt.modules.jmeter import JMeterExecutor, JTLReader, FuncJTLReader, JMeter
 from bzt.modules.provisioning import Local
 from bzt.six import etree, u
 from bzt.utils import EXE_SUFFIX, get_full_path, BetterDict, is_windows, JavaVM
-from tests import BZTestCase, RESOURCES_DIR, BUILD_DIR, close_reader_file, ROOT_LOGGER
+from tests import BZTestCase, RESOURCES_DIR, BUILD_DIR, close_reader_file
 from . import MockJMeterExecutor, MockHTTPClient
 
-_jvm = JavaVM(ROOT_LOGGER)
+_jvm = JavaVM()
 _jvm.check_if_installed()
 java_version = _jvm.version
 java10 = LooseVersion(java_version) >= LooseVersion("10")
@@ -200,6 +200,7 @@ class TestJMeterExecutor(BZTestCase):
         self.obj.prepare()
 
     def test_body_file(self):
+        body_file0 = RESOURCES_DIR + "/jmeter/file-not-found"
         body_file1 = RESOURCES_DIR + "/jmeter/body-file.dat"
         body_file2 = RESOURCES_DIR + "/jmeter/jmx/http.jmx"
         self.configure({
@@ -208,20 +209,28 @@ class TestJMeterExecutor(BZTestCase):
                 'scenario': 'bf'}],
             'scenarios': {
                 'bf': {
+                    "variables": {
+                        "put_method": "put",
+                        "J_VAR": "some_value"
+                    },
                     "requests": [
                         {
+                            'url': 'http://zero.com',
+                            "method": "get",
+                            'body-file': body_file0     # ignore because method is GET
+                        }, {
                             'url': 'http://first.com',
-                            'method': 'put',
-                            'body-file': body_file1
+                            "method": "${put_method}",
+                            'body-file': body_file1     # handle as body-file
                         }, {
                             'url': 'http://second.com',
                             'method': 'post',
-                            'body': 'body2',
+                            'body': 'body2',    # handle only 'body' as both are mentioned (body and body-file)
                             'body-file': body_file2
                         }, {
                             'url': 'https://the third.com',
                             'method': 'post',
-                            'body-file': '${J_VAR}'
+                            'body-file': '${J_VAR}'     # write variable as body-file
                         }
                     ]}}})
         res_files = self.obj.get_resource_files()
@@ -230,8 +239,8 @@ class TestJMeterExecutor(BZTestCase):
         body_fields = [req.get('body') for req in scenario.get('requests')]
         self.assertIn(body_file1, res_files)
         self.assertIn(body_file2, res_files)
-        self.assertEqual(body_fields, [{}, 'body2', {}])
-        self.assertEqual(body_files, [body_file1, body_file2, '${J_VAR}'])
+        self.assertEqual(body_fields, [{}, {}, 'body2', {}])
+        self.assertEqual(body_files, [body_file0, body_file1, body_file2, '${J_VAR}'])
 
         self.obj.prepare()
 
@@ -334,7 +343,7 @@ class TestJMeterExecutor(BZTestCase):
         http_client.add_response('GET', 'https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-3.0.zip',
                                  file=jmeter_res_dir + "jmeter-dist-3.0.zip")
         url = 'https://search.maven.org/remotecontent?filepath=kg/apc/jmeter-plugins-manager/' \
-              '{v}/jmeter-plugins-manager-{v}.jar'.format(v=JMeterExecutor.PLUGINS_MANAGER_VERSION)
+              '{v}/jmeter-plugins-manager-{v}.jar'.format(v=JMeter.PLUGINS_MANAGER_VERSION)
 
         http_client.add_response('GET', url, file=jmeter_res_dir + "jmeter-plugins-manager.jar")
         http_client.add_response('GET',
@@ -342,9 +351,9 @@ class TestJMeterExecutor(BZTestCase):
                                  file=jmeter_res_dir + "jmeter-plugins-manager.jar")
 
         self.obj.engine.get_http_client = lambda: http_client
-        jmeter_ver = JMeterExecutor.JMETER_VER
+        jmeter_ver = JMeter.VERSION
         try:
-            JMeterExecutor.JMETER_VER = '3.0'
+            JMeter.VERSION = '3.0'
 
             self.obj.settings.merge({"path": path})
             self.configure({
@@ -370,7 +379,7 @@ class TestJMeterExecutor(BZTestCase):
 
             self.obj.prepare()
         finally:
-            JMeterExecutor.JMETER_VER = jmeter_ver
+            JMeter.VERSION = jmeter_ver
 
     @skipIf(java10, "Disabled on Java 10")
     def test_install_jmeter_2_13(self):
@@ -387,16 +396,16 @@ class TestJMeterExecutor(BZTestCase):
         http_client.add_response('GET', 'https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-2.13.zip',
                                  file=jmeter_res_dir + "jmeter-dist-2.13.zip")
         url = 'https://search.maven.org/remotecontent?filepath=kg/apc/jmeter-plugins-manager/' \
-              '{v}/jmeter-plugins-manager-{v}.jar'.format(v=JMeterExecutor.PLUGINS_MANAGER_VERSION)
+              '{v}/jmeter-plugins-manager-{v}.jar'.format(v=JMeter.PLUGINS_MANAGER_VERSION)
         http_client.add_response('GET', url, file=jmeter_res_dir + "jmeter-plugins-manager.jar")
         http_client.add_response('GET',
                                  'https://search.maven.org/remotecontent?filepath=kg/apc/cmdrunner/2.2/cmdrunner-2.2.jar',
                                  file=jmeter_res_dir + "jmeter-plugins-manager.jar")
 
-        jmeter_ver = JMeterExecutor.JMETER_VER
+        jmeter_ver = JMeter.VERSION
         self.obj.engine.get_http_client = lambda: http_client
         try:
-            JMeterExecutor.JMETER_VER = '2.13'
+            JMeter.VERSION = '2.13'
 
             self.obj.settings.merge({"path": path})
             self.configure({
@@ -425,7 +434,7 @@ class TestJMeterExecutor(BZTestCase):
 
             self.obj.prepare()
         finally:
-            JMeterExecutor.JMETER_VER = jmeter_ver
+            JMeter.VERSION = jmeter_ver
 
     def test_install_disabled(self):
         path = os.path.abspath(BUILD_DIR + "jmeter-taurus/bin/jmeter" + EXE_SUFFIX)
@@ -2261,7 +2270,7 @@ class TestJMeterExecutor(BZTestCase):
                     "http://example.com/"]}})
         self.obj.settings.merge({"version": "auto"})
         self.obj.prepare()
-        self.assertEqual(self.obj.JMETER_VER, self.obj.tool.version)
+        self.assertEqual(JMeter.VERSION, self.obj.tool.version)
 
     def test_detect_ver_wrong(self):
         self.obj.execution.merge({
@@ -2269,7 +2278,7 @@ class TestJMeterExecutor(BZTestCase):
                 "script": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"}})
         self.obj.settings.merge({"version": "auto"})
         self.obj.prepare()
-        self.assertEqual(self.obj.JMETER_VER, self.obj.tool.version)
+        self.assertEqual(JMeter.VERSION, self.obj.tool.version)
 
     def test_detect_ver_2_13(self):
         self.obj.execution.merge({
@@ -2284,7 +2293,7 @@ class TestJMeterExecutor(BZTestCase):
             'scenario': {
                 "script": RESOURCES_DIR + "/jmeter/jmx/SteppingThreadGroup.jmx"}})
         self.obj.prepare()
-        self.assertEqual(self.obj.JMETER_VER, self.obj.tool.version)
+        self.assertEqual(JMeter.VERSION, self.obj.tool.version)
 
     def test_jsr223_block(self):
         script = RESOURCES_DIR + "/jmeter/jsr223_script.js"
@@ -2671,4 +2680,5 @@ class TestJMeterExecutor(BZTestCase):
         self.obj.execute = lambda *args, **kwargs: None
         self.obj.startup()
         jmeter_home = self.obj.env.get("JMETER_HOME")
-        self.assertEqual(jmeter_home, get_full_path("~/.bzt/jmeter-taurus/4.0"))
+        self.assertEqual(jmeter_home, get_full_path(self.obj.settings.get("path"), step_up=2))
+        self.assertEqual(jmeter_home, get_full_path(RESOURCES_DIR))
