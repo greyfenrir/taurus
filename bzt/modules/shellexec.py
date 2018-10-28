@@ -53,7 +53,7 @@ class ShellExecutor(Service):
             env.set(task_config.get('env'))
             env.add_path({"PYTHONPATH": working_dir})
 
-            task = Task(task_config, self.log, working_dir, env)
+            task = Task(task_config, self.log, working_dir, env, self.engine)
             container.append(task)
             self.log.debug("Added %s task: %s", stage, stage_task)
 
@@ -107,9 +107,10 @@ class Task(object):
     """
     :type process: subprocess.Popen
     """
-    def __init__(self, config, parent_log, working_dir, env):
+    def __init__(self, config, parent_log, working_dir, env, engine):
         self.log = parent_log.getChild(self.__class__.__name__)
         self.working_dir = working_dir
+        self.engine = engine
         self.env = env
 
         self.command = config.get("command", TaurusConfigError("Parameter is required: command"))
@@ -140,20 +141,11 @@ class Task(object):
             err = self.err
 
         kwargs = {
-            'args': self.command,
             'stdout': out,
             'stderr': err,
-            'cwd': self.working_dir,
-            'env': self.env.get(),
             'shell': True
         }
-        # FIXME: shouldn't we bother closing opened descriptors?
-        if not is_windows():
-            kwargs['preexec_fn'] = os.setpgrp
-            kwargs['close_fds'] = True
-
-        self.log.info("Starting shell command: %s", self)
-        self.process = subprocess.Popen(**kwargs)
+        self.process = self.engine.start_subprocess(self.command, env=self.env, cwd=self.working_dir, **kwargs)
         if self.is_background:
             self.log.debug("Task started, PID: %d", self.process.pid)
         else:

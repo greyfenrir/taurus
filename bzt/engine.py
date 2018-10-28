@@ -184,14 +184,14 @@ class Engine(object):
             module.startup()
         self.config.dump()
 
-    def start_subprocess(self, args, cwd, stdout, stderr, stdin, shell, env):
+    def start_subprocess(self, args, env, cwd, **kwargs):
         if cwd is None:
             cwd = self.default_cwd
 
         env = Environment(self.log, env.get())
         env.set(self.shared_env.get())
 
-        return shell_exec(args, cwd=cwd, stdout=stdout, stderr=stderr, stdin=stdin, shell=shell, env=env.get())
+        return shell_exec(args, cwd=cwd, env=env.get(), **kwargs)
 
     def run(self):
         """
