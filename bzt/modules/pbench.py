@@ -30,7 +30,7 @@ from subprocess import CalledProcessError
 import psutil
 
 from bzt import TaurusConfigError, ToolError, TaurusInternalException
-from bzt.engine import ScenarioExecutor, FileLister, HavingInstallableTools, SelfDiagnosable
+from bzt.engine import ScenarioExecutor, HavingInstallableTools, SelfDiagnosable
 from bzt.modules.aggregator import ResultsReader, DataPoint, KPISet, ConsolidatingAggregator
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.requests_model import HTTPRequest
@@ -39,7 +39,7 @@ from bzt.utils import RequiredTool, IncrementableProgressBar, FileReader, RESOUR
 from bzt.utils import shell_exec, shutdown_process, BetterDict, dehumanize_time, get_full_path
 
 
-class PBenchExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstallableTools, SelfDiagnosable):
+class PBenchExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, SelfDiagnosable):
     """
     :type generator: PBenchGenerator
     :type widget: ExecutorWidget

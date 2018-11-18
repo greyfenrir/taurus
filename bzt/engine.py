@@ -993,21 +993,6 @@ class Provisioning(EngineModule):
             self.executors.append(instance)
 
 
-class FileLister(object):
-    """
-    A mixin to get required files info from executor
-    """
-
-    @abstractmethod
-    def resource_files(self):
-        """
-        Get list of resource files
-
-        :rtype: list
-        """
-        pass
-
-
 class ScenarioExecutor(EngineModule):
     """
     :type provisioning: engine.Provisioning
@@ -1035,6 +1020,9 @@ class ScenarioExecutor(EngineModule):
         self.start_time = None
         self.preprocess_args = lambda x: None
 
+    def resource_files(self):
+        return []
+
     def _get_tool(self, tool, **kwargs):
         env = Environment(self.log, self.env.get())
 
@@ -1042,7 +1030,6 @@ class ScenarioExecutor(EngineModule):
         assert isinstance(instance, RequiredTool)
 
         return instance
-
 
     def has_results(self):
         if self.reader and self.reader.buffer:
@@ -1173,9 +1160,7 @@ class ScenarioExecutor(EngineModule):
                              iterations=iterations, duration=duration, steps=steps)
 
     def get_resource_files(self):
-        files_list = []
-        if isinstance(self, FileLister):
-            files_list.extend(self.resource_files())
+        files_list = self.resource_files()
         files_list.extend(self.execution.get("files", []))
         return files_list
 

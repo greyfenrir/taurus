@@ -22,14 +22,14 @@ from math import ceil
 from subprocess import CalledProcessError
 
 from bzt import ToolError
-from bzt.engine import ScenarioExecutor, HavingInstallableTools, SelfDiagnosable, FileLister
+from bzt.engine import ScenarioExecutor, HavingInstallableTools, SelfDiagnosable
 from bzt.modules.aggregator import ConsolidatingAggregator, ResultsReader
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.six import communicate, unicode_decode
 from bzt.utils import shell_exec, shutdown_process, RequiredTool, dehumanize_time, get_full_path, LDJSONReader
 
 
-class MolotovExecutor(ScenarioExecutor, FileLister, WidgetProvider, HavingInstallableTools, SelfDiagnosable):
+class MolotovExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, SelfDiagnosable):
     def __init__(self):
         super(MolotovExecutor, self).__init__()
         self.process = None

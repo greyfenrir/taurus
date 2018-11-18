@@ -20,7 +20,7 @@ import os
 import time
 
 from bzt import ToolError
-from bzt.engine import ScenarioExecutor, FileLister, SelfDiagnosable
+from bzt.engine import ScenarioExecutor, SelfDiagnosable
 from bzt.modules.aggregator import ConsolidatingAggregator
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.modules.functional import FunctionalAggregator, FuncSamplesReader, LoadSamplesReader
@@ -99,7 +99,7 @@ class TransactionProvider(object):
             listener.transaction_ended(self._source, label, duration)
 
 
-class SubprocessedExecutor(ReportableExecutor, FileLister, SelfDiagnosable, WidgetProvider, TransactionProvider):
+class SubprocessedExecutor(ReportableExecutor, SelfDiagnosable, WidgetProvider, TransactionProvider):
     """
     Class for subprocessed executors
 

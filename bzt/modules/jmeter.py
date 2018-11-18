@@ -33,7 +33,7 @@ from itertools import dropwhile
 from cssselect import GenericTranslator
 
 from bzt import TaurusConfigError, ToolError, TaurusInternalException, TaurusNetworkError
-from bzt.engine import ScenarioExecutor, Scenario, FileLister, HavingInstallableTools
+from bzt.engine import ScenarioExecutor, Scenario, HavingInstallableTools
 from bzt.engine import SelfDiagnosable, Provisioning, SETTINGS
 from bzt.jmx import JMX, JMeterScenarioBuilder, LoadSettingsProcessor
 from bzt.modules.aggregator import ConsolidatingAggregator, ResultsReader, DataPoint, KPISet
@@ -44,11 +44,11 @@ from bzt.modules.soapui import SoapUIScriptConverter
 from bzt.requests_model import ResourceFilesCollector, has_variable_pattern, HierarchicRequestParser
 from bzt.six import iteritems, string_types, StringIO, etree, numeric_types, PY2, unicode_decode, communicate
 from bzt.utils import get_full_path, EXE_SUFFIX, MirrorsManager, ExceptionalDownloader, get_uniq_name, is_windows
-from bzt.utils import shell_exec, BetterDict, guess_csv_dialect, ensure_is_dict, dehumanize_time, FileReader
+from bzt.utils import shell_exec, BetterDict, guess_csv_dialect, dehumanize_time, FileReader
 from bzt.utils import unzip, RequiredTool, JavaVM, shutdown_process, ProgressBarContext, TclLibrary
 
 
-class JMeterExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstallableTools, SelfDiagnosable):
+class JMeterExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, SelfDiagnosable):
     """
     JMeter executor module
 

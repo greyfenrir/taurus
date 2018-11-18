@@ -23,7 +23,7 @@ import traceback
 import copy
 
 from bzt import TaurusConfigError, ToolError, TaurusInternalException
-from bzt.engine import FileLister, ScenarioExecutor, HavingInstallableTools, SelfDiagnosable
+from bzt.engine import ScenarioExecutor, HavingInstallableTools, SelfDiagnosable
 from bzt.modules.aggregator import ConsolidatingAggregator, ResultsReader
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.requests_model import HTTPRequest
@@ -31,7 +31,7 @@ from bzt.six import etree, parse, iteritems
 from bzt.utils import shell_exec, shutdown_process, RequiredTool, dehumanize_time, which, FileReader
 
 
-class TsungExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstallableTools, SelfDiagnosable):
+class TsungExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, SelfDiagnosable):
     """
     Tsung executor module
     """

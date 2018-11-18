@@ -21,7 +21,7 @@ import subprocess
 import time
 
 from bzt import TaurusConfigError, ToolError
-from bzt.engine import ScenarioExecutor, FileLister, HavingInstallableTools, SelfDiagnosable
+from bzt.engine import ScenarioExecutor, HavingInstallableTools, SelfDiagnosable
 from bzt.modules.aggregator import ConsolidatingAggregator, ResultsReader
 from bzt.modules.console import WidgetProvider, ExecutorWidget
 from bzt.modules.java import TaurusJavaHelper
@@ -31,7 +31,7 @@ from bzt.utils import shell_exec, MirrorsManager, dehumanize_time, get_full_path
 from bzt.utils import unzip, RequiredTool, JavaVM, shutdown_process, TclLibrary, FileReader, RESOURCES_DIR
 
 
-class GrinderExecutor(ScenarioExecutor, WidgetProvider, FileLister, HavingInstallableTools, SelfDiagnosable):
+class GrinderExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, SelfDiagnosable):
     """
     Grinder executor module
     """
