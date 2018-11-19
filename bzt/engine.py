@@ -993,6 +993,10 @@ class Provisioning(EngineModule):
             self.executors.append(instance)
 
 
+class FileLister(object):   # for backward compatibility. todo: remove it later
+    pass
+
+
 class ScenarioExecutor(EngineModule):
     """
     :type provisioning: engine.Provisioning
