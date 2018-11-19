@@ -146,9 +146,9 @@ class SeleniumExecutor(AbstractSeleniumExecutor, WidgetProvider, HavingInstallab
             else:
                 raise TaurusConfigError("You must specify either script or list of requests to run Selenium")
 
-    def resource_files(self):
+    def _resource_files(self):
         self.create_runner()
-        return self.runner.resource_files()
+        return self.runner._resource_files()
 
     def detect_script_type(self, script_name):
         if not os.path.exists(script_name):

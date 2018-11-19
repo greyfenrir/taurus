@@ -477,7 +477,7 @@ class TestSeleniumJUnitTester(SeleniumTestCase):
             },
             'reporting': [{'module': 'junit-xml'}]
         })
-        self.assertEqual(len(self.obj.resource_files()), 1)
+        self.assertEqual(len(self.obj._resource_files()), 1)
 
     def test_additional_classpath(self):
         scenario_cp = 'class_path_from_scenario'
@@ -505,7 +505,7 @@ class TestSeleniumJUnitTester(SeleniumTestCase):
             },
             'reporting': [{'module': 'junit-xml'}]
         })
-        self.assertEqual(len(self.obj.resource_files()), 1)
+        self.assertEqual(len(self.obj._resource_files()), 1)
 
 
 class TestSeleniumTestNGRunner(SeleniumTestCase):

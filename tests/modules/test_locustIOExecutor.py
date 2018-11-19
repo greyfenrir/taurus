@@ -148,7 +148,7 @@ class TestLocustIOExecutor(ExecutorTestCase):
                 "script": RESOURCES_DIR + "locust/simple.py"
             }
         }})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertEqual(1, len(resource_files))
 
     def test_resource_files_requests(self):
@@ -163,7 +163,7 @@ class TestLocustIOExecutor(ExecutorTestCase):
                 ]
             }
         }})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertEqual(0, len(resource_files))
 
     def test_fail_on_zero_results(self):

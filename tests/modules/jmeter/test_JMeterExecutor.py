@@ -501,7 +501,7 @@ class TestJMeterExecutor(ExecutorTestCase):
     def test_resource_files_collection_remote_prov(self):
         self.obj.execution.merge({"scenario": {"script": RESOURCES_DIR + "/jmeter/jmx/files.jmx"}})
         self.assertNotIn('files', self.obj.execution)
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 1)
         self.assertIn('files', self.obj.execution)
         self.assertEqual(4, len(self.obj.execution['files']))
@@ -520,7 +520,7 @@ class TestJMeterExecutor(ExecutorTestCase):
             with open(file_in_home, 'w') as _file:  # real file is required by Engine.find_file()
                 _file.write('')
         self.obj.engine.file_search_paths = ['tests']  # config not in cwd
-        self.obj.resource_files()
+        self.obj._resource_files()
         if file_was_created:
             os.remove(file_in_home)
 
@@ -538,7 +538,7 @@ class TestJMeterExecutor(ExecutorTestCase):
         config = json.loads(open(RESOURCES_DIR + "json/get-post.json").read())
         config['provisioning'] = 'cloud'
         self.configure(config)
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 3)
         self.assertEqual(len(set(res_files)), 2)
 
@@ -557,7 +557,7 @@ class TestJMeterExecutor(ExecutorTestCase):
             'execution': {
                 'scenario': {
                     'data-sources': [csv_file, csv_file_uni]}}})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertIn(csv_file, resource_files)
         self.assertIn(csv_file_uni, resource_files)
 
@@ -575,7 +575,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                         'path': csv_file_uni,
                         'loop': False,
                         'quoted': True}]}}})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertIn(csv_file, resource_files)
         self.assertIn(csv_file_uni, resource_files)
 
@@ -590,7 +590,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             'language': 'javascript',
                             'script-file': js_file,
                         }}]}}})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertIn(js_file, resource_files)
 
     def test_resource_files_jsr223s(self):
@@ -608,7 +608,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             'language': 'javascript',
                             'script-file': js_file2,
                         }]}]}}})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertEqual(2, len(resource_files))
         self.assertIn(js_file, resource_files)
         self.assertIn(js_file2, resource_files)
@@ -1513,7 +1513,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                 'scenario': {
                     "script": script}},
             'provisioning': 'cloud'})
-        self.obj.resource_files()
+        self.obj._resource_files()
         original = JMX(script)
         prepared = JMX(self.obj.original_jmx)
         query = '//CSVDataSet/stringProp[@name="filename"]/text()'
@@ -1613,7 +1613,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             ]
                         }]}]}},
             'provisioning': 'cloud'})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 2)
 
     def test_request_logic_loop(self):
@@ -1784,7 +1784,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             "method": "POST",
                             "body-file": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"}]}]}},
             'provisioning': 'cloud'})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 1)
 
     def test_request_logic_while(self):
@@ -1822,7 +1822,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             "method": "POST",
                             "body-file": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"}]}]}},
             'provisioning': 'cloud'})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 1)
 
     def test_request_logic_foreach(self):
@@ -1852,7 +1852,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             "method": "POST",
                             "body-file": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"}]}]}},
             'provisioning': 'cloud'})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 1)
 
     def test_request_logic_transaction(self):
@@ -1881,7 +1881,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                             "method": "POST",
                             "body-file": RESOURCES_DIR + "/jmeter/jmx/dummy.jmx"}]}]}},
             'provisioning': 'cloud'})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 1)
 
     def test_request_logic_include(self):
@@ -1921,7 +1921,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                     "requests": [{
                         "include-scenario": "login"}]}},
             'provisioning': 'cloud'})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 3)
 
     def test_logic_include_data_sources(self):
@@ -1975,7 +1975,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                         "include-scenario": "a"}]}},
             'execution': {
                 'scenario': 'a'}})
-        self.assertRaises(TaurusConfigError, self.obj.resource_files)
+        self.assertRaises(TaurusConfigError, self.obj._resource_files)
 
     def test_logic_test_action(self):
         self.configure({
@@ -2561,7 +2561,7 @@ class TestJMeterExecutor(ExecutorTestCase):
                 "subroutine": {"requests": ["http://blazedemo.com"]},
             },
         })
-        self.obj.resource_files()
+        self.obj._resource_files()
 
     def test_resource_files_relpath(self):
         self.configure({

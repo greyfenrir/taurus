@@ -100,13 +100,6 @@ class PBenchExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, S
     def shutdown(self):
         shutdown_process(self.generator.process, self.log)
 
-    def resource_files(self):
-        script = self.get_script_path()
-        if script:
-            return [script]
-        else:
-            return []
-
     def install_required_tools(self):
         self.tool = self._get_tool(PBench, config=self.settings)
 

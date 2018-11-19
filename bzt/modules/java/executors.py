@@ -92,8 +92,8 @@ class JavaTestRunner(SubprocessedExecutor, HavingInstallableTools):
 
         self._compile_scripts()
 
-    def resource_files(self):
-        resources = super(JavaTestRunner, self).resource_files()
+    def _resource_files(self):
+        resources = super(JavaTestRunner, self)._resource_files()
         resources.extend(self.get_scenario().get("additional-classpath", []))
         global_additional_classpath = self.settings.get("additional-classpath", [])
 
@@ -305,8 +305,8 @@ class TestNGTester(JavaTestRunner):
                 return testng_xml
         return None
 
-    def resource_files(self):
-        resources = super(TestNGTester, self).resource_files()
+    def _resource_files(self):
+        resources = super(TestNGTester, self)._resource_files()
         testng_xml = self.execution.get('testng-xml')
         if not testng_xml:
             testng_xml = self.detected_testng_xml()

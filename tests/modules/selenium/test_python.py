@@ -98,7 +98,7 @@ class TestSeleniumNoseRunner(SeleniumTestCase):
 
     def test_resource_files_collection_remote_nose(self):
         self.obj.execution.merge({"scenario": {"script": RESOURCES_DIR + "selenium/python/"}})
-        self.assertEqual(len(self.obj.resource_files()), 1)
+        self.assertEqual(len(self.obj._resource_files()), 1)
 
     def test_setup_exception(self):
         """

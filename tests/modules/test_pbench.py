@@ -144,7 +144,7 @@ class TestPBenchExecutor(TestPBench):
 
     def test_pbench_file_lister(self):
         self.configure({'execution': {"executor": "pbench", "scenario": {"script": "script.src"}}})
-        resource_files = self.obj.resource_files()
+        resource_files = self.obj._resource_files()
         self.assertEqual(1, len(resource_files))
         self.assertEqual(resource_files[0], 'script.src')
 

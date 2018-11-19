@@ -494,7 +494,7 @@ class GatlingExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, 
             self.widget = ExecutorWidget(self, 'Gatling: %s' % simulation)
         return self.widget
 
-    def resource_files(self):
+    def _resource_files(self):
         files = []
         script = self.get_script_path()
         if script:

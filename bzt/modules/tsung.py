@@ -135,13 +135,6 @@ class TsungExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, Se
             self.widget = ExecutorWidget(self, self.tsung_controller_id)
         return self.widget
 
-    def resource_files(self):
-        script = self.get_script_path()
-        if script:
-            return [script]
-        else:
-            return []
-
     def get_error_diagnostics(self):
         diagnostics = []
         if self.__out is not None:

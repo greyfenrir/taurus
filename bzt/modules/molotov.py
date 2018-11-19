@@ -125,7 +125,7 @@ class MolotovExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, 
                     diagnostics.append("molotov STDERR:\n" + contents)
         return diagnostics
 
-    def resource_files(self):
+    def _resource_files(self):
         return [self.get_script_path(required=True)]
 
 

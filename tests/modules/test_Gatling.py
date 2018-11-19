@@ -127,7 +127,7 @@ class TestGatlingExecutor(ExecutorTestCase):
     def test_resource_files_collection_remote2(self):  # script = <dir>
         script_path = RESOURCES_DIR + "gatling/bs"
         self.obj.execution.merge({"scenario": {"script": script_path}})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertPathsEqual(res_files, [script_path])
 
     def test_resource_files_collection_local(self):
@@ -443,7 +443,7 @@ class TestGatlingExecutor(ExecutorTestCase):
             }
         })
         self.obj.settings.merge({'additional-classpath': [jar_file]})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(res_files, [csv_path, jar_file])
 
     def test_diagnostics(self):

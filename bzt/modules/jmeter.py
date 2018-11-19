@@ -726,7 +726,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, S
             resource_files.append(res_file)
         return resource_files
 
-    def resource_files(self):
+    def _resource_files(self):
         """
         Get list of resource files, modify jmx file paths if necessary
         """

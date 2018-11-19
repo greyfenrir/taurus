@@ -1013,6 +1013,7 @@ class ScenarioExecutor(EngineModule):
         self.provisioning = None
         self.execution = BetterDict()  # FIXME: why have this field if we have `parameters` from base class?
         self.__scenario = None
+        self.is_file_lister = True
         self.label = None
         self.widget = None
         self.reader = None
@@ -1020,8 +1021,12 @@ class ScenarioExecutor(EngineModule):
         self.start_time = None
         self.preprocess_args = lambda x: None
 
-    def resource_files(self):
-        return []
+    def _resource_files(self):
+        script = self.get_script_path()
+        if script:
+            return [script]
+        else:
+            return []
 
     def _get_tool(self, tool, **kwargs):
         env = Environment(self.log, self.env.get())
@@ -1160,8 +1165,9 @@ class ScenarioExecutor(EngineModule):
                              iterations=iterations, duration=duration, steps=steps)
 
     def get_resource_files(self):
-        files_list = self.resource_files()
-        files_list.extend(self.execution.get("files", []))
+        files_list = self.execution.get("files", [])
+        if self.is_file_lister:
+            files_list.extend(self._resource_files())
         return files_list
 
     def __repr__(self):

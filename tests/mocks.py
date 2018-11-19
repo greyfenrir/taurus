@@ -214,7 +214,7 @@ class ModuleMock(ScenarioExecutor, Provisioning, Reporter, Service, HavingInstal
             return cls()
         return None
 
-    def resource_files(self):
+    def _resource_files(self):
         """
         :return:
         """

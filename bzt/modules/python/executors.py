@@ -43,6 +43,7 @@ class ApiritifNoseExecutor(SubprocessedExecutor):
 
     def __init__(self):
         super(ApiritifNoseExecutor, self).__init__()
+        self.is_file_lister = False
         self._tailer = FileReader(file_opener=lambda _: None, parent_logger=self.log)
 
     def create_func_reader(self, report_file):
@@ -315,8 +316,8 @@ class RobotExecutor(SubprocessedExecutor, HavingInstallableTools):
         self.variables_file = None
         self.tags = None
 
-    def resource_files(self):
-        files = super(RobotExecutor, self).resource_files()
+    def _resource_files(self):
+        files = super(RobotExecutor, self)._resource_files()
         scenario = self.get_scenario()
         if "variables" in scenario and isinstance(scenario["variables"], (string_types, text_type)):
             files.append(scenario["variables"])

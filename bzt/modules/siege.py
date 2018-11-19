@@ -76,13 +76,6 @@ class SiegeExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, Se
         if isinstance(self.engine.aggregator, ConsolidatingAggregator):
             self.engine.aggregator.add_underling(self.reader)
 
-    def resource_files(self):
-        script = self.get_script_path()
-        if script:
-            return [script]
-        else:
-            return []
-
     def _fill_url_file(self):
         url_file_name = self.engine.create_artifact("siege", ".url")
         user_vars = self.scenario.get('variables')

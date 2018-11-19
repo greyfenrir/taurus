@@ -126,13 +126,6 @@ class SubprocessedExecutor(ReportableExecutor, SelfDiagnosable, WidgetProvider, 
         self.start_time = time.time()
         self.process = self.execute(cmdline, stdout=std_out, stderr=std_err, **kwargs)
 
-    def resource_files(self):
-        script = self.get_script_path()
-        if script:
-            return [script]
-        else:
-            return []
-
     def check(self):
         ret_code = self.process.poll()
         if ret_code is not None:

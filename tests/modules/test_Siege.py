@@ -54,7 +54,7 @@ class TestSiegeExecutor(ExecutorTestCase):
                     'v2': 'TWO'},
                 "script": join(RESOURCES_DIR, "siege", "url-file")}}})
         self.obj.prepare()
-        self.assertNotEqual(len(self.obj.resource_files()), 0)
+        self.assertNotEqual(len(self.obj._resource_files()), 0)
         self.obj.get_widget()
         self.obj.startup()
 
@@ -81,7 +81,7 @@ class TestSiegeExecutor(ExecutorTestCase):
                     "http://blazedemo.com",
                     "http://ya.ru"]}}})
         self.obj.prepare()
-        self.assertEqual(len(self.obj.resource_files()), 0)
+        self.assertEqual(len(self.obj._resource_files()), 0)
         self.assertRaises(TaurusConfigError, self.obj.startup)
 
     def test_full_execution(self):

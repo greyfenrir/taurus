@@ -94,7 +94,7 @@ class TestGrinderExecutor(BZTestCase):
 
     def test_resource_files_collection_basic(self):
         self.obj.execution.merge({"scenario": {"script": RESOURCES_DIR + "grinder/helloworld.py"}})
-        res_files = self.obj.resource_files()
+        res_files = self.obj._resource_files()
         self.assertEqual(len(res_files), 1)
 
     def test_fail_on_zero_results(self):

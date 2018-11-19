@@ -161,7 +161,7 @@ class TestSeleniumStuff(SeleniumTestCase):
             "scenario": {
                 "requests": [
                     "http://blazedemo.com"]}})
-        resources = self.obj.resource_files()
+        resources = self.obj._resource_files()
         self.assertEqual(0, len(resources))
 
     def test_dont_copy_local_script_to_artifacts(self):
@@ -174,7 +174,7 @@ class TestSeleniumStuff(SeleniumTestCase):
             }
         })
         self.obj.prepare()
-        files = self.obj.resource_files()
+        files = self.obj._resource_files()
         self.assertIn(script_path, files)
         artifacts_script = os.path.join(self.obj.engine.artifacts_dir, filename)
         self.assertFalse(os.path.exists(artifacts_script))
@@ -237,7 +237,7 @@ class TestSeleniumStuff(SeleniumTestCase):
             'modules': {
                 'junit': {
                     'additional-classpath': [RESOURCES_DIR + 'selenium/testng/jars/testng-suite.jar']}}})
-        own_resources = self.obj.resource_files()
+        own_resources = self.obj._resource_files()
         all_resources = list(set(self.obj.get_resource_files()))
 
         # scenario.script, scenario.additional-classpath, settings.additional-classpath

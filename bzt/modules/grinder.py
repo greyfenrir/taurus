@@ -248,7 +248,7 @@ class GrinderExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, 
                 self.widget.duration += self.get_load().ramp_up  # because we have ramp-down equal to rampup
         return self.widget
 
-    def resource_files(self):
+    def _resource_files(self):
         resource_files = []
         script_file_path = self.get_script_path()
         if script_file_path:
