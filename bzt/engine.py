@@ -1165,9 +1165,12 @@ class ScenarioExecutor(EngineModule):
                              iterations=iterations, duration=duration, steps=steps)
 
     def get_resource_files(self):
-        files_list = self.execution.get("files", [])
+        files_list = []
         if self.is_file_lister:
             files_list.extend(self._resource_files())
+
+        # it must be the last extension as execution.files list can be changed during _resource_files()
+        files_list.extend(self.execution.get("files", []))
         return files_list
 
     def __repr__(self):
