@@ -21,8 +21,7 @@ from os.path import join
 from bzt import ToolError
 from bzt.engine import HavingInstallableTools
 from bzt.modules import SubprocessedExecutor
-from bzt.modules.aggregator import ConsolidatingAggregator
-from bzt.modules.functional import FunctionalAggregator, FuncSamplesReader
+from bzt.modules.functional import FuncSamplesReader
 from bzt.modules.jmeter import JTLReader
 from bzt.six import string_types
 from bzt.utils import get_full_path, shell_exec, TclLibrary, JavaVM

@@ -44,6 +44,7 @@ class ApacheBenchmarkExecutor(ScenarioExecutor, WidgetProvider, HavingInstallabl
         self.stderr_file = None
         self.tool = None
         self.scenario = None
+        self.is_file_lister = False
 
     def prepare(self):
         self.scenario = self.get_scenario()
