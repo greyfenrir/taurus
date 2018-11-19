@@ -732,7 +732,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, S
         """
         # get all resource files from requests
         scenario = self.get_scenario()
-        resource_files = self.res_files_from_scenario(scenario)
+        resource_files = self._res_files_from_scenario(scenario)
 
         self.original_jmx = self.get_script_path()
         if self.original_jmx:
@@ -784,7 +784,7 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, S
                     resource_files.append(resource_element.text)
         return resource_files
 
-    def res_files_from_scenario(self, scenario):
+    def _res_files_from_scenario(self, scenario):
         files = []
         data_sources = scenario.data.get('data-sources')
         if data_sources:
@@ -795,11 +795,11 @@ class JMeterExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, S
                     files.append(data_source['path'])
         requests = scenario.get_requests(parser=HierarchicRequestParser)
         for req in requests:
-            files.extend(self.res_files_from_request(req))
+            files.extend(self._res_files_from_request(req))
             self.resource_files_collector.clear_path_cache()
         return files
 
-    def res_files_from_request(self, request):
+    def _res_files_from_request(self, request):
         if self.resource_files_collector is None:
             self.resource_files_collector = ResourceFilesCollector(self)
         return self.resource_files_collector.visit(request)

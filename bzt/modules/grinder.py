@@ -249,10 +249,7 @@ class GrinderExecutor(ScenarioExecutor, WidgetProvider, HavingInstallableTools, 
         return self.widget
 
     def _resource_files(self):
-        resource_files = []
-        script_file_path = self.get_script_path()
-        if script_file_path:
-            resource_files.append(script_file_path)
+        resource_files = super(GrinderExecutor, self)._resource_files()
 
         prop_file = self.get_scenario().get("properties-file")
         if prop_file:

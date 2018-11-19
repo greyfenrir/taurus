@@ -395,7 +395,7 @@ class ResourceFilesCollector(RequestVisitor):
             raise TaurusConfigError(msg % scenario_name)
         self.record_path(scenario_name)
         scenario = self.executor.get_scenario(name=block.scenario_name)
-        return self.executor.res_files_from_scenario(scenario)
+        return self.executor._res_files_from_scenario(scenario)
 
     def visit_actionblock(self, _):
         return []
