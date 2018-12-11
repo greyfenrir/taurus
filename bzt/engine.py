@@ -1,6 +1,6 @@
 """
 Main BZT classes
-
+"
 Copyright 2015 BlazeMeter Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
