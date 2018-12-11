@@ -1409,10 +1409,11 @@ class TestRobotExecutor(ExecutorTestCase):
         self.obj.prepare()
         try:
             self.obj.startup()
+            raise BaseException('!!')
             while not self.obj.check():
                 time.sleep(self.obj.engine.check_interval)
         finally:
-            raise BaseException('!!')
+            pass
             #self.obj.shutdown()
         self.obj.post_process()
         self.assertFalse(self.obj.has_results())

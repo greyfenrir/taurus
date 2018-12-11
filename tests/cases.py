@@ -84,9 +84,9 @@ class ExecutorTestCase(BZTestCase):
         self.obj.engine = self.engine
 
     def configure(self, config):
-        #self.obj.engine.config.merge({"settings": {"default-executor": "mock"}})
+        self.obj.engine.config.merge({"settings": {"default-executor": "mock"}})
         self.obj.engine.config.merge(config)
-        #self.obj.engine.unify_config()
+        self.obj.engine.unify_config()
         self.obj.execution = self.obj.engine.config.get(ScenarioExecutor.EXEC)[0]
 
     def tearDown(self):
