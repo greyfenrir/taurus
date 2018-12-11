@@ -1412,7 +1412,8 @@ class TestRobotExecutor(ExecutorTestCase):
             while not self.obj.check():
                 time.sleep(self.obj.engine.check_interval)
         finally:
-            self.obj.shutdown()
+            raise BaseException('!!')
+            #self.obj.shutdown()
         self.obj.post_process()
         self.assertFalse(self.obj.has_results())
         self.assertNotEquals(self.obj.process, None)

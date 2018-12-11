@@ -6,32 +6,24 @@ environment:
     - PYTHON: "C:\\Python35"
       PYTHON_VERSION: "3.5.x"
       PYTHON_ARCH: "64"
-      NODEJS_VERSION: "6"
     - PYTHON: "C:\\Python27"
       PYTHON_VERSION: "2.7.x"
       PYTHON_ARCH: "64"
-      NODEJS_VERSION: "6"
 
 platform:
   - x64
 
 install:
   - choco install firefox --version 57.0.4
-  - ps: Install-Product node $env:NODEJS_VERSION
+
   - "%PYTHON%\\python.exe -m pip install pip wheel --upgrade"
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
   - "%PYTHON%\\python.exe -m pip install -r tests/ci/requirements.txt"
-  - set PATH=C:\Ruby22\bin;%PYTHON%\Scripts\;%PATH%
-  - gem install rspec
+
 
 build: off
 
 before_test:
-  - ruby -v
-  - gem -v
-  - rspec --version
-  - node --version
-  - locust --version
   - ps: Start-Process python tests/resources/httpserver/start.py
 
 test_script:
