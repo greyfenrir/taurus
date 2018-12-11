@@ -1432,11 +1432,13 @@ class TestRobotExecutor(ExecutorTestCase):
         try:
             start_time = time.time()
             self.obj.startup()
-            raise BaseException('1')
             while not self.obj.check():
                 time.sleep(self.obj.engine.check_interval)
+                if time.time() - start_time > 5:
+                    raise BaseException('if')
         finally:
-            raise BaseException('2')
+            pass
+            #raise BaseException('2')
 
             #self.obj.shutdown()
         self.obj.post_process()
