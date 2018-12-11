@@ -1434,13 +1434,9 @@ class TestRobotExecutor(ExecutorTestCase):
             self.obj.startup()
             while not self.obj.check():
                 time.sleep(self.obj.engine.check_interval)
-                if time.time() - start_time > 5:
-                    raise BaseException('if')
         finally:
-            pass
-            #raise BaseException('2')
-
-            #self.obj.shutdown()
+            self.obj.shutdown()
+        raise BaseException('before pp')
         self.obj.post_process()
         self.assertTrue(os.path.exists(self.obj.report_file))
         duration = time.time() - start_time
