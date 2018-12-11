@@ -1409,12 +1409,10 @@ class TestRobotExecutor(ExecutorTestCase):
         self.obj.prepare()
         try:
             self.obj.startup()
-            raise BaseException('!!')
             while not self.obj.check():
                 time.sleep(self.obj.engine.check_interval)
         finally:
-            pass
-            #self.obj.shutdown()
+            self.obj.shutdown()
         self.obj.post_process()
         self.assertFalse(self.obj.has_results())
         self.assertNotEquals(self.obj.process, None)
@@ -1434,10 +1432,13 @@ class TestRobotExecutor(ExecutorTestCase):
         try:
             start_time = time.time()
             self.obj.startup()
+            raise BaseException('1')
             while not self.obj.check():
                 time.sleep(self.obj.engine.check_interval)
         finally:
-            self.obj.shutdown()
+            raise BaseException('2')
+
+            #self.obj.shutdown()
         self.obj.post_process()
         self.assertTrue(os.path.exists(self.obj.report_file))
         duration = time.time() - start_time
