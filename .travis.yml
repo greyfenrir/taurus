@@ -49,7 +49,7 @@ before_script:
 - python tests/resources/httpserver/start.py &
 
 script:
-- coverage run --source=. -m nose tests -v tests.modules.test_Gatling:TestGatlingExecutor.test_props_with_space_v2
+- coverage run --source=. -m nose -v tests.modules.test_Gatling:TestGatlingExecutor.test_props_with_space_v2
 
 after_success:
 - if [ "$TRAVIS_OS_NAME" = "linux" ]; then coverage report -m && codecov; fi
