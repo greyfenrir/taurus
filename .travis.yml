@@ -6,14 +6,6 @@ branches:
   only:
   - master
 
-os: linux
-
-python:
-- "2.7"
-- "3.4"
-- "3.5"
-- "3.6"
-
 env:
   global:
   - DISPLAY=:99.0
@@ -57,7 +49,7 @@ before_script:
 - python tests/resources/httpserver/start.py &
 
 script:
-- coverage run --source=. -m nose tests -v $GENERAL_EXCLUDE $OSX_EXCLUDE --with-timer --timer-top-n 30
+- coverage run --source=. -m nose tests -v tests.modules.test_Gatling:TestGatlingExecutor.test_props_with_space_v2
 
 after_success:
 - if [ "$TRAVIS_OS_NAME" = "linux" ]; then coverage report -m && codecov; fi
