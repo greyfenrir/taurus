@@ -35,7 +35,6 @@ addons:
   firefox: "65.0.3"
   apt:
     packages:
-    #- openjdk-8-jdk
     - mono-complete
     - xvfb
 
@@ -46,8 +45,6 @@ install:
   else
     gpg --keyserver hkp://keys.gnupg.net --recv-keys $RVM_KEY && rvm get stable || echo "rvm update fail"
   fi
-#- nvm install 6.11
-#- nvm use 6.11
 - gem install rspec
 - $PIP_INSTALL --upgrade pip
 - $PIP_INSTALL "pyyaml<5.1"
@@ -55,7 +52,7 @@ install:
 - $PIP_INSTALL -r tests/ci/requirements.txt
 
 before_script:
-- if [ "$TRAVIS_OS_NAME" = "linux" ]; then bash -c "Xvfb &"; fi
+- if [ "$TRAVIS_OS_NAME" = "linux" ]; then bash -c "Xvfb :99 &"; fi
 - if [ "$TRAVIS_OS_NAME" = "osx" ]; then sudo nohup bash -c "xvfb :99 &"; fi
 - python tests/resources/httpserver/start.py &
 
