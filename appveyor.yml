@@ -2,6 +2,10 @@
 skip_branch_with_pr: true
 
 environment:
+image:
+    - Visual Studio 2015
+    - Visual Studio 2017
+    - Ubuntu
   matrix:
     - PYTHON: "C:\\Python35"
       PYTHON_VERSION: "3.5.x"
