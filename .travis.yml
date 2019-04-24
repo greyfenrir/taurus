@@ -55,7 +55,7 @@ install:
 - $PIP_INSTALL -r tests/ci/requirements.txt
 
 before_script:
-- if [ "$TRAVIS_OS_NAME" = "linux" ]; then bash -c "Xvfb :99 &"; fi
+- if [ "$TRAVIS_OS_NAME" = "linux" ]; then bash -c "Xvfb &"; fi
 - if [ "$TRAVIS_OS_NAME" = "osx" ]; then sudo nohup bash -c "xvfb :99 &"; fi
 - python tests/resources/httpserver/start.py &
 
