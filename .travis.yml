@@ -22,13 +22,13 @@ addons:
   chrome: stable
 
 install:
-- %PIP_INSTALL% --upgrade pip
-- %PIP_INSTALL% "pyyaml<5.1"
-- %PIP_INSTALL% -r requirements.txt
-- %PIP_INSTALL% -r tests/ci/requirements.txt
+- python -m pip install --upgrade pip
+- python -m pip install "pyyaml<5.1"
+- python -m pip install -r requirements.txt
+- python -m pip install -r tests/ci/requirements.txt
 
 
 script:
-- %PYTHON% -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
+- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
 
