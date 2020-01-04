@@ -25,6 +25,10 @@ env:
 install:
 - cinst -y python
 script:
+  - export PATH="$(powershell -Command '("Process", "Machine" | % {
+    [Environment]::GetEnvironmentVariable("PATH", $_) -Split ";" -Replace "\\$", ""
+    } | Select -Unique | % { cygpath $_ }) -Join ":"')"
+  - echo "new PATH=$PATH"
   - python -m pip
   - python3 -m pip
   - pip3
