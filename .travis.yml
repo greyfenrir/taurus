@@ -29,12 +29,11 @@ script:
   - ps: pip3
   - sh: pip
   - sh: pip3
+  - pip3
   - export PATH="$(powershell -Command '("Process", "Machine" | % {
     [Environment]::GetEnvironmentVariable("PATH", $_) -Split ";" -Replace "\\$", ""
     } | Select -Unique | % { cygpath $_ }) -Join ":"')"
   - echo "new PATH=$PATH"
-  - python -m pip
-  - python3 -m pip
   - pip3
 #- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
