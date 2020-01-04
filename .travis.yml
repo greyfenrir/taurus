@@ -25,6 +25,7 @@ env:
 
 script:
   - choco install pip
+  - pip
   - python -m pip
 #- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
