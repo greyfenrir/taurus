@@ -26,6 +26,8 @@ install:
 - cinst -y python
 script:
   - python -m pip
+  - python3 -m pip
+  - pip3
 #- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
 
