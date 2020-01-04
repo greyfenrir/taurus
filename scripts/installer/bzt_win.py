@@ -6,3 +6,4 @@ os.environ["PATH"] += os.pathsep + os.path.join(os.path.dirname(sys.executable),
 
 def main():
     sys.exit(os.system("cmd /k bzt --help"))
+
