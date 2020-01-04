@@ -24,7 +24,6 @@ env:
 
 install:
 - cinst -y python
-- refreshenv
 script:
   - pip
   - pip install wheel
