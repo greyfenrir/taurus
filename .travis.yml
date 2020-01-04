@@ -24,7 +24,8 @@ env:
 
 
 script:
-  - python3
+  - python3 --version
+  - python --version
 #- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
 
