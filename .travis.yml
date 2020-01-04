@@ -22,11 +22,12 @@ env:
 #- python -m pip install -r requirements.txt
 #- python -m pip install -r tests/ci/requirements.txt
 
-
+install:
+- cinst -y python
+- refreshenv
 script:
-  - choco install pip
   - pip
-  - python -m pip
+  - pip install wheel
 #- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
 
