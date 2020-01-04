@@ -32,7 +32,6 @@ install:
 - pip3 install -r requirements.txt
 - pip3 install -r tests/ci/requirements.txt
 script:
-- nosetests tests
-#- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
+- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
 
