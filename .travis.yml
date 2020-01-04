@@ -27,10 +27,12 @@ install:
 - export PATH="$(powershell -Command '("Process", "Machine" | % {
   [Environment]::GetEnvironmentVariable("PATH", $_) -Split ";" -Replace "\\$", ""
   } | Select -Unique | % { cygpath $_ }) -Join ":"')"
-- pip3 install nose
+#- python -m pip install --upgrade pip
+- pip3 install "pyyaml<5.1"
+- pip3 install -r requirements.txt
+- pip3 install -r tests/ci/requirements.txt
 script:
-- python -m pip
-- python3 -m pip
+- nosetests tests
 #- python -m nose tests -v tests.modules.jmeter.test_JMX:TestJMX.test_int_udv
 
 
