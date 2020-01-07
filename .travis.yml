@@ -38,7 +38,7 @@ matrix:
     - $PYTHON -m ensurepip
     - $PIP_INSTALL --upgrade pip wheel
     script:
-    - $PYTHON -m nose tests -v --exclude-dir=tests/resources --exclude-dir=tests/ci -with-coverage --cover-inclusive
+    - $PYTHON -m nose tests.modules # -v --exclude-dir=tests/resources --exclude-dir=tests/ci -with-coverage --cover-inclusive
 
 addons:
   firefox: latest
