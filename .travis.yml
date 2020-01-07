@@ -67,7 +67,7 @@ matrix:
     - ruby -v
     - gem -v
     - rspec --version
-    - powershell -C 'python tests/resources/httpserver/start.py &'
+    - start /b python tests/resources/httpserver/start.py
     script:
     - $PYTHON -m nose tests -v --exclude-dir=tests/resources --exclude-dir=tests/ci #-with-coverage --cover-inclusive
 
