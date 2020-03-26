@@ -36,6 +36,4 @@ class TestPyTestExecutor(ExecutorTestCase):
         finally:
             self.obj.shutdown()
         self.obj.post_process()
-        with open(self.obj.report_file) as fds:
-            report = [json.loads(line) for line in fds.readlines() if line]
-        self.assertEqual(7, len(report))
+

@@ -16,8 +16,14 @@ class TestSeleniumRSpecRunner(SeleniumTestCase):
     def exec_and_communicate(self, *args, **kwargs):
         return "", ""
 
-    def full_run(self, config):
-
+    def test_rspec_full(self):
+        config = {
+            'execution': {
+                'hold-for': '10s',
+                'iterations': 3,
+                'scenario': {'script': RESOURCES_DIR + 'selenium/ruby/example_spec.rb'},
+            },
+        }
         self.configure(config)
         dummy = RESOURCES_DIR + 'selenium/ruby/ruby' + EXE_SUFFIX
 
@@ -33,34 +39,3 @@ class TestSeleniumRSpecRunner(SeleniumTestCase):
         self.obj.startup()
         self.obj.shutdown()
         self.obj.post_process()
-
-    def test_rspec_full(self):
-        self.full_run({
-            'execution': {
-                'hold-for': '10s',
-                'iterations': 3,
-                'scenario': {'script': RESOURCES_DIR + 'selenium/ruby/example_spec.rb'},
-            },
-        })
-        self.assertIn('--hold-for 10', self.CMD_LINE)
-        self.assertIn('--iterations 3', self.CMD_LINE)
-
-    def test_rspec_hold(self):
-        self.full_run({
-            'execution': {
-                'hold-for': '10s',
-                'scenario': {'script': RESOURCES_DIR + 'selenium/ruby/example_spec.rb'},
-                'executor': 'selenium'
-            },
-        })
-        self.assertIn('--hold-for 10', self.CMD_LINE)
-
-    def test_rspec_iterations(self):
-        self.full_run({
-            'execution': {
-                'iterations': 3,
-                'scenario': {'script': RESOURCES_DIR + 'selenium/ruby/example_spec.rb'},
-                'executor': 'selenium'
-            },
-        })
-        self.assertIn('--iterations 3', self.CMD_LINE)
