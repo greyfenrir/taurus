@@ -58,23 +58,3 @@ class TestPyTestExecutor(ExecutorTestCase):
         with open(self.obj.report_file) as fds:
             report = [json.loads(line) for line in fds.readlines() if line]
         self.assertEqual(7, len(report))
-
-    def test_additional_args(self):
-        additional_args = "--foo --bar"
-        self.obj.execution.merge({
-            "scenario": {
-                "additional-args": additional_args,
-                "script": RESOURCES_DIR + "selenium/pytest/test_single.py"
-            }
-        })
-        self.obj.runner_path = RESOURCES_DIR + "selenium/pytest/bin/runner.py"
-        self.obj.prepare()
-        try:
-            self.obj.startup()
-            while not self.obj.check():
-                time.sleep(self.obj.engine.check_interval)
-        finally:
-            self.obj.shutdown()
-        with open(self.obj.stdout.name) as fds:
-            stdout = fds.read()
-            self.assertIn(additional_args, stdout)
