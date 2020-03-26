@@ -18,42 +18,6 @@ from tests.modules.selenium import SeleniumTestCase
 from bzt.resources.selenium_extras import Manager
 
 
-class MockWebDriver(object):
-    def __init__(self, content, timeout=60):
-        self.content = []
-        for element in content:
-            key, val = list(element.items())[0]
-            self.content.append((Manager.BYS[key.lower()], val))
-        self.timeout = timeout
-        self.waiting_time = 0
-
-    def implicitly_wait(self, timeout):
-        self.timeout = timeout
-
-    def find_elements(self, *target):
-        self.waiting_time += self.timeout
-        return [element for element in self.content if element == target]
-
-
-class TestLocatorsMagager(BZTestCase):
-    def test_get_locator_timeout(self):
-        content = [{'css': 'existed_css'}]
-        timeout = 30
-        driver = MockWebDriver(content=content, timeout=timeout)
-        locators_manager = Manager()
-
-        apiritif.put_into_thread_store(driver=driver, timeout=timeout, func_mode=False)
-
-        missing_locators = [{'css': 'missing_css'}, {'xpath': 'missing_xpath'}]
-        self.assertRaises(NoSuchElementException, locators_manager.get_locator, missing_locators)
-        self.assertEqual(30, driver.waiting_time)
-
-        driver.waiting_time = 0
-        existed_locators = [{'css': 'existed_css'}]
-        locators_manager.get_locator(existed_locators)
-        self.assertEqual(30, driver.waiting_time)
-
-
 class TestPyTestExecutor(ExecutorTestCase):
     EXECUTOR = PyTestExecutor
 
