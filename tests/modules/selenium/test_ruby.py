@@ -1,4 +1,5 @@
 import bzt
+import os
 from bzt.utils import EXE_SUFFIX
 from tests import RESOURCES_DIR
 from tests.modules.selenium import SeleniumTestCase
@@ -14,6 +15,9 @@ class TestSeleniumRSpecRunner(SeleniumTestCase):
         return "", ""
 
     def test_rspec_full(self):
+        if os.path.exists("geckodriver.log"):
+            self.fail('geckodriver found (suddenly)')
+
         config = {
             'execution': {
                 'hold-for': '10s',
