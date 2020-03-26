@@ -64,35 +64,3 @@ class TestSeleniumRSpecRunner(SeleniumTestCase):
             },
         })
         self.assertIn('--iterations 3', self.CMD_LINE)
-
-    def test_interpreter(self):
-        self.configure({
-            'execution': {
-                'iterations': 3,
-                'scenario': {'script': RESOURCES_DIR + 'selenium/ruby/example_spec.rb'},
-                'executor': 'selenium'
-            },
-        })
-        self.obj.settings.merge(self.obj.engine.config.get("modules").get("selenium"))
-
-        dummy = RESOURCES_DIR + 'selenium/ruby/ruby' + EXE_SUFFIX
-        self.obj.settings.merge({"interpreter": dummy})
-        self.obj.settings.merge({"path": dummy})
-
-        self.obj.prepare()
-
-    def test_selenium_prepare_rspec(self):
-        self.configure({
-            "execution": {
-                "scenario": {
-                    "script": RESOURCES_DIR + "selenium/ruby/example_spec.rb"
-                }}})
-
-        dummy = RESOURCES_DIR + 'selenium/ruby/ruby' + EXE_SUFFIX
-
-        self.obj.settings.merge({"interpreter": dummy})
-        self.obj.settings.merge({"path": dummy})
-        self.obj.settings.merge(self.obj.engine.config.get("modules").get("selenium"))
-
-        self.obj.prepare()
-        self.assertEqual(self.obj.script, os.path.normpath(RESOURCES_DIR + "selenium/ruby/example_spec.rb"))
