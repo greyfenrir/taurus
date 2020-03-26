@@ -1,21 +1,7 @@
-import json
-import os
-
 import time
 
-import apiritif
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-
-from bzt.engine import EXEC
-from bzt.modules import ConsolidatingAggregator
-from bzt.modules.functional import FuncSamplesReader, LoadSamplesReader, FunctionalAggregator
-from bzt.modules.apiritif import ApiritifNoseExecutor
 from bzt.modules.pytest import PyTestExecutor
-from bzt.modules.robot import RobotExecutor
-from tests import RESOURCES_DIR, ExecutorTestCase, BZTestCase
-from tests.modules.selenium import SeleniumTestCase
-from bzt.resources.selenium_extras import Manager
+from tests import RESOURCES_DIR, ExecutorTestCase
 
 
 class TestPyTestExecutor(ExecutorTestCase):

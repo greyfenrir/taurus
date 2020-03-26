@@ -1,6 +1,3 @@
-import json
-import os
-
 import bzt
 from bzt.utils import EXE_SUFFIX
 from tests import RESOURCES_DIR
