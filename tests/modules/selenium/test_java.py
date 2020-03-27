@@ -19,7 +19,7 @@ class TestTestNGTester(ExecutorTestCase):
     def setUp(self):
         super(TestTestNGTester, self).setUp()
         self.obj.engine.configure([local_paths_config()])
-        #self.obj.settings = self.obj.engine.config.get("modules").get("testng")
+        self.obj.settings = self.obj.engine.config.get("modules").get("testng")
         #raise BaseException('in testtestngtester!')
 
 
