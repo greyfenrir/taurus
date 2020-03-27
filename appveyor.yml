@@ -18,22 +18,11 @@ install:
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
   - "%PYTHON%\\python.exe -m pip install -r tests/ci/requirements.txt"
   - set PATH=C:\Ruby22\bin;%PYTHON%\Scripts\;%PATH%
-  - gem install rspec
-
 build: off
 
 before_test:
-  - ruby -v
-  - gem -v
-  - rspec --version
-  - node --version
-  - locust --version
   - ps: Start-Process python tests/resources/httpserver/start.py
 
 test_script:
   - "%PYTHON%\\python.exe -m nose tests -v --exclude-dir=tests/resources \
       --exclude-dir=tests/ci --with-coverage --cover-inclusive"
-
-after_test:
-  - "coverage report -m"
-  - "codecov"
