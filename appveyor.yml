@@ -1,4 +1,6 @@
 # Do not build feature branch with open Pull Requests
+image:
+  - Visual Studio 2019
 skip_branch_with_pr: true
 
 environment:
