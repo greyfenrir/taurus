@@ -361,8 +361,16 @@ class TestSeleniumStuff(SeleniumTestCase):
         reader.close()
         self.obj.runner._tailer.close()
         self.obj.runner.reader.underlings[0].csvreader.file.close()
-        cumulative = self.obj.engine.aggregator.cumulative
-        self.assertEquals(4, len(list(lines)), str(cumulative[''][KPISet.ERRORS]))
+        dat = {
+            'resutls': reader.name,
+            'stdout': self.obj.runner.stdout.name,
+            'stderr': self.obj.runner.stderr.name}
+
+        log = ''
+        for src in dat:
+            with open(dat[src]) as out:
+                log += src + "({})".format(dat[src]) + '\n' + out.read() + '\n'
+        self.assertEquals(4, len(list(lines)), log)
 
     def test_fail_on_zero_results(self):
         self.configure(yaml.load(open(RESOURCES_DIR + "yaml/selenium_executor_requests.yml").read()))
