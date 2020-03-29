@@ -22,4 +22,16 @@ class TestPyTestExecutor(ExecutorTestCase):
         finally:
             self.obj.shutdown()
         self.obj.post_process()
+        dat = {
+            #'resutls': reader.name,
+            'stdout': self.obj.stdout.name,
+            'stderr': self.obj.stderr.name}
+
+        log = '\n\n'
+        for src in dat:
+
+            with open(dat[src]) as out:
+                log += src + "({})".format(dat[src]) + '\n' + out.read() + '\n'
+
+        self.assertTrue(False, log)
 
