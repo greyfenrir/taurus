@@ -1,5 +1,5 @@
 import time
-
+import os
 from bzt.modules.pytest import PyTestExecutor
 from tests import RESOURCES_DIR, ExecutorTestCase
 
@@ -25,13 +25,15 @@ class TestPyTestExecutor(ExecutorTestCase):
         dat = {
             #'resutls': reader.name,
             'stdout': self.obj.stdout.name,
-            'stderr': self.obj.stderr.name}
+            'stderr': self.obj.stderr.name,
+            'geckodriver': 'geckodriver.log',
+            'bzt.log': os.path.join(self.obj.engine.artifacts_dir, 'bzt.log')}
 
         log = '\n\n'
         for src in dat:
 
             with open(dat[src]) as out:
-                log += src + "({})".format(dat[src]) + '\n' + out.read() + '\n'
+                log += "\n**  {}  ** ".format(src) + "({})".format(dat[src]) + '\n' + out.read() + '\n'
 
         self.assertTrue(False, log)
 
