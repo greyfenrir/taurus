@@ -27,7 +27,7 @@ class TestPyTestExecutor(ExecutorTestCase):
             'stdout': self.obj.stdout.name,
             'stderr': self.obj.stderr.name,
             'geckodriver': 'geckodriver.log',
-            'bzt.log': os.path.join(self.obj.engine.artifacts_dir, 'bzt.log')}
+            'PyTestExecutor.ldjson': os.path.join(self.obj.engine.artifacts_dir, 'PyTestExecutor.ldjson')}
 
         log = '\n\n'
         for src in dat:
