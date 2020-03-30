@@ -101,6 +101,7 @@ class EngineEmul(Engine):
 
         self.check_interval = 0.1
         self.create_artifacts_dir()
+        self.default_cwd = self.artifacts_dir
         self.prepare_exc = None
         self.was_finalize = False
 
