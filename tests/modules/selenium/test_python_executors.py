@@ -1,5 +1,6 @@
 import time
 import os
+from bzt.modules.selenium import GeckoDriver
 from bzt.modules.pytest import PyTestExecutor
 from tests import RESOURCES_DIR, ExecutorTestCase
 
@@ -15,6 +16,10 @@ class TestPyTestExecutor(ExecutorTestCase):
             }
         })
         self.obj.prepare()
+        driver = self.obj._get_tool(GeckoDriver, config=self.obj.settings.get('geckodriver'))
+        if not driver.check_if_installed():
+            driver.install()
+        self.obj.env.add_path({"PATH": driver.get_driver_dir()})
         try:
             self.obj.startup()
             while not self.obj.check():
