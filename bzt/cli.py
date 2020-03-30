@@ -181,7 +181,7 @@ class CLI(object):
         if self.__is_verbose():
             CLI.console_handler.setLevel(logging.DEBUG)
         self.engine.create_artifacts_dir(configs, merged_config)
-        self.engine.default_cwd = os.getcwd()
+        self.engine.default_cwd = self.engine.artifacts_dir #os.getcwd()
         self.engine.eval_env()  # yacky, I don't like having it here, but how to apply it after aliases and artif dir?
 
     def __is_verbose(self):
