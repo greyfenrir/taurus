@@ -14,6 +14,8 @@ from tests import ROOT_LOGGER
 from tests.mocks import EngineEmul
 
 TestCase.shortDescription = lambda self: None  # suppress nose habit to show docstring instead of method name
+ROOT_LOGGER.setLevel(logging.DEBUG)
+ROOT_LOGGER.handlers = [logging.NullHandler()]
 
 
 class BZTestCase(TestCase):
