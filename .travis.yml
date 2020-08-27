@@ -51,7 +51,7 @@ install:
     gpg --keyserver hkp://keys.gnupg.net --recv-keys $RVM_KEY && rvm get stable || echo "rvm update fail"
   fi
 - gem install rspec
-- $PIP_INSTALL --upgrade pip
+- $PIP_INSTALL --upgrade pip nose2
 - $PIP_INSTALL -r requirements.txt
 - $PIP_INSTALL -r tests/ci/requirements.txt
 
@@ -61,7 +61,7 @@ before_script:
 - $PYTHON tests/resources/httpserver/start.py &
 
 script:
-- coverage run --source=. -m nose tests -v $GENERAL_EXCLUDE $OSX_EXCLUDE --with-timer --timer-top-n 30
+- coverage run --source=. -m nose2 tests -v
 
 after_success:
 - if [ "$TRAVIS_OS_NAME" = "linux" ]; then coverage report -m && codecov; fi
