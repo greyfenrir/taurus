@@ -68,10 +68,11 @@ class TestSeleniumExecutor(SeleniumTestCase):
             stages = "Transaction started", "Transaction ended"
             names = "t1", "t2", "t3"
 
+            lll = "content=\n'%s'" % content
             for stage in stages:
                 cases = [line for line in content if stage in line]
                 for name in names:
-                    self.assertIn(name, '\n'.join(cases))
+                    self.assertIn(name, '\n'.join(cases), lll)
 
     def check_flow_markers(self):
         with open(self.wd_log) as wd_file:
