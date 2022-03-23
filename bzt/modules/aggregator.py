@@ -225,9 +225,9 @@ class RegularConcurrency(Concurrency):
     def __init__(self):
         self.concurrencies = Counter()  # concurrencies is values of concurrency for different source IDs
 
-    def merge(self, src_concurrency, sid):
-        concurrency = src_concurrency.get()
-        self.add_concurrency(concurrency, sid)
+    def merge(self, src_concurrency, sid=None):
+        for src, concurrency in src_concurrency.concurrencies.items():
+            self.add_concurrency(concurrency, src)
 
     def get(self):
         return sum(self.concurrencies.values())
@@ -447,7 +447,7 @@ class KPISet(dict):
         self[self.FAILURES] += src[self.FAILURES]
         self[self.BYTE_COUNT] += src[self.BYTE_COUNT]
 
-        self._concurrency.merge(src._concurrency, sid)
+        self._concurrency.merge(src._concurrency)
 
         if src[self.RESP_TIMES]:
             self[self.RESP_TIMES].merge(src[self.RESP_TIMES])
@@ -1042,6 +1042,7 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
             for subresult in points_to_consolidate[1:]:
                 self.log.debug("Merging %s", subresult[DataPoint.TIMESTAMP])
                 point.merge_point(subresult, do_recalculate=False)
+
             if len(points_to_consolidate) > 1:
                 point.recalculate()
 
