@@ -226,8 +226,8 @@ class RegularConcurrency(Concurrency):
         self.concurrencies = Counter()  # concurrencies is values of concurrency for different source IDs
 
     def merge(self, src_concurrency, sid):
-        concurrency = src_concurrency.get()
-        self.add_concurrency(concurrency, sid)
+        for src, concurrency in src_concurrency.concurrencies.items():
+            self.add_concurrency(concurrency, src)
 
     def get(self):
         return sum(self.concurrencies.values())
@@ -579,11 +579,7 @@ class ResultsProvider(object):
         self.cumulative = {}
         self.track_percentiles = [0.0, 50.0, 90.0, 95.0, 99.0, 99.9, 100.0]
         self.listeners = []
-        self.buffer_len = 2
-        self.min_buffer_len = 2
-        self.max_buffer_len = float('inf')
-        self.buffer_multiplier = 2
-        self.buffer_scale_idx = None
+
         self.histogram_max = 1.0
         self.known_errors = fuzzyset.FuzzySet(use_levenshtein=True)
         self.max_error_count = 100
@@ -640,7 +636,7 @@ class ResultsProvider(object):
         """
         self.listeners.append(listener)
 
-    def __merge_to_cumulative(self, current):
+    def _merge_to_cumulative(self, current):
         """
         Merge current KPISet to cumulative
         :param current: KPISet
@@ -662,10 +658,9 @@ class ResultsProvider(object):
         """
         for datapoint in self._calculate_datapoints(final_pass):
             current = datapoint[DataPoint.CURRENT]
-            if datapoint[DataPoint.CUMULATIVE] or not self._ramp_up_exclude():
-                self.__merge_to_cumulative(current)
-                datapoint[DataPoint.CUMULATIVE] = copy.deepcopy(self.cumulative)
-                datapoint.recalculate()
+            self._merge_to_cumulative(current)
+            datapoint[DataPoint.CUMULATIVE] = copy.deepcopy(self.cumulative)
+            datapoint.recalculate()
 
             for listener in self.listeners:
                 listener.aggregated_second(datapoint)
@@ -678,13 +673,6 @@ class ResultsProvider(object):
         """
         yield
 
-    @abstractmethod
-    def _ramp_up_exclude(self):
-        """
-        :rtype : bool
-        """
-        return False
-
 
 class ResultsReader(ResultsProvider):
     """
@@ -696,7 +684,7 @@ class ResultsReader(ResultsProvider):
         self.ignored_labels = []
         self.log = logging.getLogger(self.__class__.__name__)
         self.buffer = {}
-        self.min_timestamp = 0
+        self.min_buffer_len = 1
         if perc_levels is not None:
             self.track_percentiles = perc_levels
 
@@ -735,10 +723,6 @@ class ResultsReader(ResultsProvider):
 
                 if any([label.startswith(ignore) for ignore in self.ignored_labels]):
                     continue
-
-                if t_stamp < self.min_timestamp:
-                    self.log.debug("Putting sample %s into %s", t_stamp, self.min_timestamp)
-                    t_stamp = self.min_timestamp
 
                 if r_time < 0:
                     self.log.warning("Negative response time reported by tool, resetting it to zero")
@@ -814,29 +798,15 @@ class ResultsReader(ResultsProvider):
         :type final_pass: bool
         :rtype: DataPoint
         """
-        if final_pass or len(self.buffer) < self.buffer_len * 10:  # safety valve to preserve RAM
-            self.__process_readers(final_pass)
-        else:
-            self.log.debug("Skipped reading new data, we have enough in the buffer")
-
+        self.__process_readers(final_pass)
         self.log.debug("Buffer len: %s; Known errors count: %s", len(self.buffer), len(self.known_errors))
+
         if not self.buffer:
             return
 
-        if self.cumulative and self.track_percentiles and self.buffer_scale_idx is not None:
-            old_len = self.buffer_len
-            chosen_timing = self.cumulative[''][KPISet.PERCENTILES][self.buffer_scale_idx]
-            self.buffer_len = round(chosen_timing * self.buffer_multiplier)
-
-            self.buffer_len = max(self.min_buffer_len, self.buffer_len)
-            self.buffer_len = min(self.max_buffer_len, self.buffer_len)
-            if self.buffer_len != old_len:
-                self.log.info("Changed data analysis delay to %ds", self.buffer_len)
-
         timestamps = sorted(self.buffer.keys())
-        while final_pass or (timestamps[-1] >= (timestamps[0] + self.buffer_len)):
+        while final_pass or (timestamps[-1] >= (timestamps[0] + self.min_buffer_len)):
             timestamp = timestamps.pop(0)
-            self.min_timestamp = timestamp + 1
             self.log.debug("Aggregating: %s, %s in buffer", timestamp, len(self.buffer))
             samples = self.buffer.pop(timestamp)
             datapoint = self.__get_new_datapoint(timestamp)
@@ -880,9 +850,38 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
         self.ignored_labels = ["ignore"]
         self.underlings = []
         self.buffer = {}
+
+        self.min_buffer_len = 2
         self.histogram_max = 5.0
         self._sticky_concurrencies = {}
-        self.min_timestamp = None
+        self.min_timestamp = None   # last aggregated timestamp
+        self.first_timestamp = None   # first data timestamp, just for exclude_ramp_up feature
+
+    def datapoints(self, final_pass=False):
+        """
+        :type final_pass: bool
+        """
+        for datapoint in self._calculate_datapoints(final_pass):
+            current = datapoint[DataPoint.CURRENT]
+
+            datapoint[DataPoint.CUMULATIVE] = dict()    # todo remove it after removing cumulative from readers
+
+            # exclude ramp-up block
+            timestamp = datapoint[DataPoint.TIMESTAMP]
+            self.min_timestamp = timestamp + 1
+            if not self.first_timestamp:
+                self.first_timestamp = timestamp
+
+            skip_ramp_up = self.engine.config.get('settings').get('ramp-up-exclude') and self._is_ramp_up(timestamp)
+            if not skip_ramp_up:
+                self._merge_to_cumulative(current)
+                datapoint[DataPoint.CUMULATIVE] = copy.deepcopy(self.cumulative)
+                datapoint.recalculate()
+
+            for listener in self.listeners:
+                listener.aggregated_second(datapoint)
+
+            yield datapoint
 
     def converter(self, data):
         if data and self._redundant_aggregation:
@@ -937,30 +936,6 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
 
         self.ignored_labels = self.settings.get("ignore-labels", self.ignored_labels)
         self.generalize_labels = self.settings.get("generalize-labels", self.generalize_labels)
-
-        self.min_buffer_len = dehumanize_time(self.settings.get("min-buffer-len", self.min_buffer_len))
-
-        max_buffer_len = self.settings.get("max-buffer-len", self.max_buffer_len)
-        try:
-            self.max_buffer_len = dehumanize_time(max_buffer_len)
-        except TaurusInternalException as exc:
-            self.log.debug("Exception in dehumanize_time(%s): %s", max_buffer_len, exc)
-            raise TaurusConfigError("Wrong 'max-buffer-len' value: %s" % max_buffer_len)
-
-        self.buffer_multiplier = self.settings.get("buffer-multiplier", self.buffer_multiplier)
-
-        count = len(self.track_percentiles)
-        if count == 1:
-            self.buffer_scale_idx = str(float(self.track_percentiles[0]))
-        if count > 1:
-            percentile = self.settings.get("buffer-scale-choice", 0.5)
-            percentiles = [i / (count - 1.0) for i in range(count)]
-            distances = [abs(percentile - percentiles[i]) for i in range(count)]
-            index_position = distances.index(min(distances))
-            self.buffer_scale_idx = str(float(self.track_percentiles[index_position]))
-
-        debug_str = 'Buffer scaling setup: percentile %s from %s selected'
-        self.log.debug(debug_str, self.buffer_scale_idx, self.track_percentiles)
         self.histogram_max = dehumanize_time(self.settings.get("histogram-initial", self.histogram_max))
         self.max_error_count = self.settings.get("max-error-variety", self.max_error_count)
 
@@ -979,10 +954,7 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
         """
         underling.track_percentiles = self.track_percentiles
         underling.ignored_labels = self.ignored_labels
-        underling.min_buffer_len = self.min_buffer_len
-        underling.max_buffer_len = self.max_buffer_len
-        underling.buffer_multiplier = self.buffer_multiplier
-        underling.buffer_scale_idx = self.buffer_scale_idx
+        underling.buffer_len = 1
         underling.histogram_max = self.histogram_max
 
         underling.max_error_count = self.max_error_count
@@ -1027,24 +999,26 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
                 break
 
     def _put_into_buffer(self, point):
-        tstamp = point[DataPoint.TIMESTAMP]
-        if self.buffer:
-            mints = min(self.buffer.keys())
-            if tstamp < mints:
-                self.log.debug("Putting datapoint %s into %s", tstamp, mints)
-                point[DataPoint.TIMESTAMP] = mints
-                tstamp = mints
-        self.buffer.setdefault(tstamp, []).append(point)
+        timestamp = point[DataPoint.TIMESTAMP]
+        if self.min_timestamp:
+            if timestamp < self.min_timestamp:
+                self.log.debug("Putting datapoint %s into %s", timestamp, self.min_timestamp)
+                point[DataPoint.TIMESTAMP] = self.min_timestamp
+                timestamp = self.min_timestamp
+        else:
+            self.min_timestamp = timestamp
+        self.buffer.setdefault(timestamp, []).append(point)
 
-    def _get_max_ramp_up(self):
+    def _is_ramp_up(self, ts):
         ramp_ups = [0]
+        if not self.first_timestamp:
+            self.first_timestamp = ts
+
         for execution in self.engine.config['execution']:
             if 'ramp-up' in execution:
                 ramp_ups.append(dehumanize_time(execution['ramp-up']))
-        return max(ramp_ups)
-
-    def _ramp_up_exclude(self):
-        return self.engine.config.get('settings').get('ramp-up-exclude')
+        max_ramp_up = max(ramp_ups)
+        return ts < self.first_timestamp + max_ramp_up
 
     def _calculate_datapoints(self, final_pass=False):
         """
@@ -1057,19 +1031,10 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
             return
 
         timestamps = sorted(self.buffer.keys())
-        while timestamps and (final_pass or (timestamps[-1] >= timestamps[0] + self.buffer_len)):
+        while timestamps and (final_pass or (timestamps[-1] >= timestamps[0] + self.min_buffer_len)):
             tstamp = timestamps.pop(0)
             self.log.debug("Merging into %s", tstamp)
             points_to_consolidate = self.buffer.pop(tstamp)
-
-            for subresult in points_to_consolidate:
-                if self._ramp_up_exclude():
-                    if not self.min_timestamp:
-                        self.min_timestamp = subresult['ts']
-
-                    if subresult['ts'] < self.min_timestamp + self._get_max_ramp_up():
-                        subresult[DataPoint.CUMULATIVE] = dict()
-
             Concurrency.update_sticky(self._sticky_concurrencies, points_to_consolidate)
             point = points_to_consolidate[0]
             point[DataPoint.SOURCE_ID] = self.__class__.__name__ + '@' + str(id(self))
@@ -1077,6 +1042,7 @@ class ConsolidatingAggregator(Aggregator, ResultsProvider):
             for subresult in points_to_consolidate[1:]:
                 self.log.debug("Merging %s", subresult[DataPoint.TIMESTAMP])
                 point.merge_point(subresult, do_recalculate=False)
+
             if len(points_to_consolidate) > 1:
                 point.recalculate()
 

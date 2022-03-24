@@ -8,19 +8,19 @@ from tests.unit import BZTestCase, EngineEmul
 from tests.unit.mocks import r, MockReader, MockListener
 
 
-def get_success_reader(offset=0):
+def get_success_reader(offset=0, trname=''):
     mock = MockReader()
-    mock.data.append((1 + offset, "first", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((2 + offset, "second", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((2 + offset, "first", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((3 + offset, "second", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((3 + offset, "first", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((4 + offset, "third", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((4 + offset, "first", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((6 + offset, "second", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((6 + offset, "third", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((6 + offset, "first", 1, r(), r(), r(), 200, None, '', 0))
-    mock.data.append((5 + offset, "first", 1, r(), r(), r(), 200, None, '', 0))
+    mock.data.append((1 + offset, "first", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((2 + offset, "second", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((2 + offset, "first", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((3 + offset, "second", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((3 + offset, "first", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((4 + offset, "third", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((4 + offset, "first", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((6 + offset, "second", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((6 + offset, "third", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((6 + offset, "first", 1, r(), r(), r(), 200, None, trname, 0))
+    mock.data.append((5 + offset, "first", 1, r(), r(), r(), 200, None, trname, 0))
     return mock
 
 
@@ -82,11 +82,10 @@ class TestTools(BZTestCase):
     def test_mock(self):
         # check mock reader
         reader = get_success_reader()
-        reader.buffer_scale_idx = '90.0'
         first = list(reader.datapoints())
         second = list(reader.datapoints(True))
-        self.assertEquals([1, 2, 3, 4], [x[DataPoint.TIMESTAMP] for x in first])
-        self.assertEquals([5, 6], [x[DataPoint.TIMESTAMP] for x in second])
+        self.assertEquals([1, 2, 3, 4, 5], [x[DataPoint.TIMESTAMP] for x in first])
+        self.assertEquals([6], [x[DataPoint.TIMESTAMP] for x in second])
         for point in first + second:
             self.assertIn("", point[DataPoint.CURRENT])
 
@@ -202,8 +201,8 @@ class TestConsolidatingAggregator(BZTestCase):
     def test_two_executions(self):
         self.obj.track_percentiles = [0, 50, 100]
         self.obj.prepare()
-        underling1 = get_success_reader()
-        underling2 = get_success_reader()
+        underling1 = get_success_reader(trname='1')
+        underling2 = get_success_reader(trname='2')
         self.obj.add_underling(underling1)
         self.obj.add_underling(underling2)
 
@@ -216,7 +215,7 @@ class TestConsolidatingAggregator(BZTestCase):
                 self.assertGreater(overall[KPISet.AVG_RESP_TIME], 0)
                 cnt += 1
 
-        self.assertEquals(2, cnt)
+        self.assertEquals(3, cnt)
 
     def test_new_aggregator(self):
         # aggregator's config
@@ -369,11 +368,6 @@ class TestConsolidatingAggregator(BZTestCase):
                 self.assertEqual(10000, kpiset[KPISet.RESP_TIMES].high)
             for kpiset in dp['current'].values():
                 self.assertEqual(10000, kpiset[KPISet.RESP_TIMES].high)
-
-    def test_inf_values(self):
-        self.obj.settings['max-buffer-len'] = "inf"
-        self.obj.prepare()
-        self.assertEqual(self.obj.max_buffer_len, float("inf"))
 
     def test_datapoint_to_json(self):
         self.obj.track_percentiles = [0.0, 50.0, 95.0, 99.0, 100.0]
