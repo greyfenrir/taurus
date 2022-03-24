@@ -225,7 +225,7 @@ class RegularConcurrency(Concurrency):
     def __init__(self):
         self.concurrencies = Counter()  # concurrencies is values of concurrency for different source IDs
 
-    def merge(self, src_concurrency, sid=None):
+    def merge(self, src_concurrency, sid):
         for src, concurrency in src_concurrency.concurrencies.items():
             self.add_concurrency(concurrency, src)
 
@@ -447,7 +447,7 @@ class KPISet(dict):
         self[self.FAILURES] += src[self.FAILURES]
         self[self.BYTE_COUNT] += src[self.BYTE_COUNT]
 
-        self._concurrency.merge(src._concurrency)
+        self._concurrency.merge(src._concurrency, sid)
 
         if src[self.RESP_TIMES]:
             self[self.RESP_TIMES].merge(src[self.RESP_TIMES])
